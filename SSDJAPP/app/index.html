@@ -1,0 +1,4586 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能衣橱应用</title>
+    <!-- 添加强制检查是否需要显示个人中心页面 -->
+    <script>
+        // 立即执行检查，在页面开始加载时就处理
+        (function checkProfileRedirect() {
+            console.log('页面开始加载，检查是否需要显示个人中心页面');
+            // 检查localStorage中是否有标记
+            if (localStorage.getItem('forceShowProfile') === 'true' || 
+                sessionStorage.getItem('showPage') === 'profile' ||
+                window.location.hash === '#profile') {
+                console.log('检测到需要显示个人中心页面标记');
+                
+                // 确保URL的hash是#profile
+                if (window.location.hash !== '#profile') {
+                    history.replaceState(null, null, '#profile');
+                }
+                
+                // 清除标记
+                localStorage.removeItem('forceShowProfile');
+                sessionStorage.removeItem('showPage');
+                
+                // 设置一个标志，告诉后续代码需要显示个人中心页面
+                window.SHOULD_SHOW_PROFILE = true;
+                
+                // 如果文档已经加载完成，立即执行显示个人中心页面的操作
+                if (document.readyState === 'complete') {
+                    showProfileNow();
+                } else {
+                    // 否则，在load事件中执行
+                    window.addEventListener('load', showProfileNow);
+                }
+            }
+            
+            // 立即显示个人中心页面的函数
+            function showProfileNow() {
+                console.log('立即显示个人中心页面');
+                if (typeof showScreen === 'function') {
+                    showScreen('profile');
+                } else {
+                    console.warn('showScreen函数不可用，将在加载完成后通过其他方式显示个人中心');
+                }
+            }
+        })();
+    </script>
+    <!-- 添加强制重定向脚本 -->
+    <script>
+        (function() {
+            // 如果设置了需要显示个人中心页面的标志，则不执行默认重定向
+            if (window.SHOULD_SHOW_PROFILE) {
+                return;
+            }
+            
+            // 只在没有hash或hash不是#profile的情况下重定向
+            if (window.location.hash !== '#profile' && 
+                window.location.hash !== '#home' && 
+                window.location.hash !== '#wardrobe' && 
+                window.location.hash !== '#social') {
+                // 添加home hash以确保默认显示首页
+                window.location.hash = 'home';
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="styles/main.css">
+    <!-- 引入SF Symbols的CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sf-symbols@1.0.0/css/sf-symbols.css">
+    <!-- 引入TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
+    <!-- 引入BodyPix模型 -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0"></script>
+    <!-- 引入Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入Chart.js数据标签插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- 引入图像分割处理脚本 -->
+    <script src="scripts/image-segmentation.js" defer></script>
+    <!-- 自定义样式 -->
+    <style>
+        /* 全局样式 */
+        body {
+            font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f8f8;
+            color: #333;
+        }
+        
+        /* 省略其他通用样式 */
+        
+        /* 社交页面样式 */
+        .social-top-section {
+            padding: 10px 15px;
+            background-color: #fff;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .search-bar {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        
+        .search-bar input {
+            width: 100%;
+            padding: 8px 35px 8px 15px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            background-color: #f5f5f5;
+        }
+        
+        .search-icon-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .search-keywords {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
+        
+        .keyword {
+            font-size: 12px;
+            color: #666;
+            margin-right: 10px;
+            background-color: #f0f0f0;
+            padding: 3px 8px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 0 2px;
+        }
+        
+        .section-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .more-btn {
+            font-size: 12px;
+            color: #666;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .recommendation-section {
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .recommendation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .recommendation-title {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .recommendation-more {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .recommendation-slider {
+            display: flex;
+            justify-content: space-between;
+            gap: 5px;
+            padding-bottom: 5px;
+            overflow: hidden; /* 隐藏滚动条 */
+        }
+        
+        .recommendation-item {
+            flex: 1;
+            height: 120px;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .recommendation-item img {
+            width: 90%;
+            height: 90%;
+            object-fit: cover;
+            max-height: 110px;
+        }
+        
+        .collect-btn {
+            position: absolute;
+            bottom: 8px; /* 改为底部 */
+            right: 8px;
+            background-color: rgba(255,255,255,0.8);
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+        }
+        
+        .collect-btn .star-icon {
+            margin-bottom: 2px;
+        }
+        
+        .collect-count {
+            font-size: 10px;
+            color: #666;
+            line-height: 1;
+        }
+        
+        /* 社交内容区域 */
+        .social-content-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: calc(100% - 230px);
+            padding: 0;
+            background-color: #fff;
+            overflow: hidden; /* 防止整体溢出 */
+        }
+        
+        /* 统计信息 */
+        .social-stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 10px 8px;
+            border-bottom: 1px solid #eee;
+            background-color: #fff;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+        
+        /* 社交标签 */
+        .social-tabs {
+            display: flex;
+            border-bottom: 1px solid #eee;
+            background-color: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .social-tab {
+            flex: 1;
+            padding: 10px 5px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+        }
+        
+        .social-tab.active {
+            color: #ff4d4f;
+            border-bottom: 2px solid #ff4d4f;
+        }
+        
+        /* 穿搭卡片网格 */
+        .outfit-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .outfit-card {
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .outfit-image {
+            position: relative;
+            padding-top: 150%;
+            overflow: hidden;
+        }
+        
+        .outfit-image img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .outfit-stats-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: flex-end;
+            padding: 8px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.5));
+        }
+        
+        .outfit-card .outfit-stats-overlay .like-count, 
+        .outfit-card .outfit-stats-overlay .favorite-count {
+            display: flex;
+            align-items: center;
+            color: white;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .outfit-card .heart-icon, 
+        .outfit-card .star-icon {
+            margin-right: 3px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+        }
+        
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .user-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .user-level {
+            font-size: 11px;
+            color: #999;
+            margin-left: auto;
+        }
+        
+        .share-date {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .more-content-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        
+        /* 穿搭详情弹窗 */
+        .outfit-detail-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh; /* 使用视口高度 */
+            background-color: rgba(0,0,0,0.8); /* 更改为深色背景 */
+            z-index: 999; /* 提高层级，确保在导航栏上方 */
+            overflow: hidden;
+            box-sizing: border-box;
+            padding: 0;
+        }
+        
+        .outfit-detail-content {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: white;
+            overflow: hidden;
+            box-sizing: border-box;
+            padding: 0;
+            margin: 0 auto;
+        }
+        
+        .close-btn, .back-btn {
+            position: absolute;
+            top: 10px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1500; /* 大幅提高z-index层级 */
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: auto !important; /* 强制可点击 */
+        }
+        
+        .close-btn {
+            right: 10px;
+        }
+        
+        .back-btn {
+            left: 10px;
+        }
+        
+        /* 详情大图部分 */
+        .outfit-detail-image {
+            height: 55%;
+            max-height: 460px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-color: white;
+            box-sizing: border-box;
+            margin: 35px 15px 10px;
+            padding: 0;
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .outfit-detail-image img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            width: auto;
+            height: auto;
+            margin: 0 auto;
+            display: block;
+            border-radius: 8px;
+        }
+        
+        /* 直接在大图上添加热点 */
+        .detail-item-hotspot {
+            position: absolute;
+            cursor: pointer;
+            z-index: 20; /* 提高z-index确保热点始终可见 */
+            transform: translateX(-10px) translateY(-10px); /* 调整位置以居中 */
+            background-color: rgba(255, 255, 255, 0.8); /* 确保热点背景为白色半透明 */
+            border-radius: 50%;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            width: 20px;
+            height: 20px;
+        }
+        
+        .hotspot-dot {
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(51, 51, 51, 0.8);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .hotspot-dot:before {
+            content: "+";
+            font-size: 14px; /* 减小加号尺寸 */
+            font-weight: normal; /* 不要太粗 */
+            color: rgba(51, 51, 51, 0.7); /* 颜色更淡 */
+        }
+        
+        .hotspot-dot:hover {
+            transform: scale(1.2); /* 悬停时放大 */
+            background-color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(51, 51, 51, 0.9);
+        }
+        
+        .outfit-detail-info {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 15px; 
+            max-height: 38vh; /* 使用视口高度单位 */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            box-sizing: border-box;
+        }
+        
+        .outfit-detail-info::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        
+        .detail-user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .detail-user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .detail-user-text {
+            flex: 1;
+        }
+        
+        .detail-user-name {
+            font-size: 16px;
+            font-weight: 600;
+            display: block;
+        }
+        
+        .detail-user-level {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .follow-btn {
+            padding: 5px 15px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
+        .follow-btn.followed {
+            background-color: #eee;
+            color: #666;
+        }
+        
+        .detail-stats {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        
+        .detail-like-count, .detail-favorite-count, .detail-share-count {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .detail-description {
+            line-height: 1.5;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .detail-items {
+            margin-bottom: 15px;
+        }
+        
+        .detail-items h4 {
+            font-size: 15px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .detail-items-list {
+            position: relative;
+            height: 300px;
+            background-color: transparent; /* 改为透明 */
+            border-radius: 8px;
+            overflow: hidden;
+            /* 移除列表背景，直接在图片上显示热点 */
+        }
+        
+        .detail-item-hotspot {
+            position: absolute;
+            cursor: pointer;
+            z-index: 20; /* 提高z-index确保热点始终可见 */
+            transform: translateX(-10px) translateY(-10px); /* 调整位置以居中 */
+        }
+        
+        .hotspot-dot {
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.7); /* 稍微增加不透明度 */
+            border: 1px solid rgba(51, 51, 51, 0.7);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .hotspot-dot:before {
+            content: "+";
+            font-size: 14px; /* 减小加号尺寸 */
+            font-weight: normal; /* 不要太粗 */
+            color: rgba(51, 51, 51, 0.7); /* 颜色更淡 */
+        }
+        
+        .hotspot-dot:hover {
+            transform: scale(1.2); /* 悬停时放大 */
+            background-color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(51, 51, 51, 0.9);
+        }
+        
+        .detail-comments h4 {
+            font-size: 15px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .detail-comments-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE 和 Edge */
+        }
+        
+        .detail-comments-list::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        
+        .comment-item {
+            display: flex;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .comment-user-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .comment-content {
+            flex: 1;
+        }
+        
+        .comment-user-name {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+        
+        .comment-text {
+            font-size: 13px;
+            line-height: 1.4;
+            margin-bottom: 3px;
+        }
+        
+        .comment-time {
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .comment-input {
+            position: absolute; /* 改为absolute定位 */
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            transform: none; /* 移除transform */
+            background-color: white;
+            padding: 10px 15px;
+            display: flex;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1010;
+            max-width: none; /* 移除最大宽度限制 */
+            box-sizing: border-box;
+        }
+        
+        .comment-input input {
+            flex: 1;
+            border: 1px solid #eee;
+            border-radius: 20px;
+            padding: 8px 15px;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        
+        .send-comment-btn {
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 0 15px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .detail-actions {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        
+        .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .action-btn svg {
+            margin-bottom: 5px;
+        }
+        
+        .action-btn.active {
+            color: #ff4757;
+        }
+        
+        .action-btn.favorite-action.active {
+            color: #ffa502;
+        }
+        
+        /* 单品热点弹窗 */
+        .item-hotspot-modal {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .hotspot-content {
+            width: 80%;
+            max-width: 280px;
+            background-color: white;
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin: 0 auto;
+        }
+        
+        .hotspot-item-info {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .hotspot-item-image {
+            width: 100%;
+            height: 180px; /* 减小高度 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f9f9f9;
+            overflow: hidden;
+        }
+        
+        .hotspot-item-image img {
+            max-width: 90%;
+            max-height: 90%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+        
+        .hotspot-item-details {
+            padding: 15px;
+        }
+        
+        .hotspot-item-details h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+        
+        .hotspot-item-brand {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .hotspot-item-price {
+            font-size: 16px;
+            color: #ff4757;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .hotspot-item-desc {
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        
+        .hotspot-item-link {
+            display: inline-block;
+            padding: 8px 20px;
+            background-color: #333;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .affiliate-note {
+            font-size: 12px;
+            color: #999;
+            margin: 0;
+        }
+        
+        /* 标签内容 */
+        .social-tab-content {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+            padding: 10px;
+            box-sizing: border-box;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+        }
+        
+        .social-tab-content::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        
+        .social-tab-content.active {
+            display: block;
+        }
+
+        /* 评论区样式 */
+        .detail-comments {
+            margin-bottom: 60px; /* 为底部固定的评论框留出空间 */
+        }
+        
+        /* 模拟手机边框 */
+        .phone-frame-simulation {
+            background: white; /* 恢复白色背景 */
+            display: flex !important;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .phone-frame-simulation .outfit-detail-content {
+            width: 90%;
+            max-width: 420px;
+            height: 90vh;
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 0 8px #222, 0 0 0 12px #000;
+        }
+        
+        .phone-frame-simulation:before {
+            content: "";
+            position: absolute;
+            top: 10px;
+            width: 120px;
+            height: 25px;
+            background-color: #000;
+            border-radius: 20px;
+            z-index: 9999;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* 模拟手机边框 - 修改与首页一致 */
+        .phone-frame-simulation {
+            background: white;
+            display: flex !important;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .phone-frame-simulation .outfit-detail-content {
+            width: 366px; /* 与iphone-container宽度一致 */
+            height: 820px; /* 与iphone-container高度一致 */
+            border-radius: 55px; /* 与iphone-container圆角一致 */
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1); /* 与iphone-container阴影一致 */
+            border: 12px solid #1D1D1F; /* 与iphone-container边框一致 */
+            max-width: 390px;
+            margin: 0 auto;
+        }
+
+        .phone-frame-simulation .outfit-detail-content:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px;
+            height: 32px;
+            background-color: #1D1D1F;
+            border-bottom-left-radius: 18px;
+            border-bottom-right-radius: 18px;
+            z-index: 1000;
+        }
+
+        .phone-frame-simulation .outfit-detail-content:after {
+            content: '';
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 135px;
+            height: 5px;
+            background-color: #1D1D1F;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+        
+        /* 电商详情页样式 */
+        #productDetail-screen {
+            background-color: #f8f8f8;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            padding-top: 0; /* 移除顶部状态栏后不需要额外的padding */
+        }
+        
+        #productDetail-screen .product-scroll {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            margin-top: 0; /* 移除顶部状态栏后不需要负边距 */
+            padding-bottom: 80px; /* 为底部购买栏留出空间 */
+        }
+        
+        #productDetail-screen .product-scroll::-webkit-scrollbar {
+            display: none; /* 隐藏滚动条 */
+        }
+        
+        #productDetail-screen .product-image-container {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-bottom: 1px solid #eee;
+        }
+        
+        #productDetail-screen .image-background {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            /* 使用更美观的背景图案 */
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%239C92AC' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+            background-size: 20px 20px;
+            opacity: 0.5;
+        }
+        
+        #productDetail-screen .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: opacity 0.5s ease;
+            position: relative;
+            z-index: 2;
+        }
+        
+        #productDetail-screen .image-counter {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            background-color: rgba(0,0,0,0.5);
+            color: white;
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            z-index: 3;
+        }
+        
+        #productDetail-screen .price-card,
+        #productDetail-screen .product-title-section,
+        #productDetail-screen .guarantee-section,
+        #productDetail-screen .description-section {
+            background-color: white;
+            margin-bottom: 10px;
+            padding: 15px;
+        }
+        
+        #productDetail-screen .price-section {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        #productDetail-screen .main-price {
+            display: flex;
+            align-items: baseline;
+        }
+        
+        #productDetail-screen .price-symbol {
+            color: #ff4d4f;
+            font-size: 18px;
+            font-weight: 600;
+            margin-right: 2px;
+        }
+        
+        #productDetail-screen .price-amount {
+            color: #ff4d4f;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        
+        #productDetail-screen .price-condition {
+            margin-left: 8px;
+            padding: 2px 6px;
+            background-color: #fff1f0;
+            color: #ff4d4f;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        #productDetail-screen .free-price-tag {
+            display: flex;
+            align-items: center;
+        }
+        
+        #productDetail-screen .free-package-text {
+            color: #4CAF50;
+            font-size: 18px;
+            font-weight: 700;
+            background-color: rgba(76, 175, 80, 0.15);
+            border: 2px solid #4CAF50;
+            border-radius: 6px;
+            padding: 5px 10px;
+            display: inline-block;
+            position: relative;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        #productDetail-screen .title-row {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        
+        #productDetail-screen .store-badge {
+            padding: 2px 5px;
+            background-color: #fff1f0;
+            color: #ff4d4f;
+            border: 1px solid #ffccc7;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-right: 8px;
+            margin-top: 3px;
+        }
+        
+        #productDetail-screen .product-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            line-height: 1.5;
+            flex: 1;
+        }
+        
+        #productDetail-screen .store-row {
+            display: flex;
+            align-items: center;
+        }
+        
+        #productDetail-screen .store-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        #productDetail-screen .store-name {
+            font-size: 13px;
+            color: #666;
+            margin-right: 10px;
+        }
+        
+        #productDetail-screen .store-status {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        #productDetail-screen .guarantee-section {
+            background-color: #f9f9f9;
+        }
+        
+        #productDetail-screen .guarantee-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        #productDetail-screen .guarantee-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 5px;
+            color: #52c41a;
+        }
+        
+        #productDetail-screen .guarantee-text {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        #productDetail-screen .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        #productDetail-screen .description-content {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        #productDetail-screen .description-content p {
+            margin-bottom: 10px;
+        }
+        
+        #productDetail-screen .spec-item {
+            display: flex;
+            margin-top: 10px;
+        }
+        
+        #productDetail-screen .spec-label {
+            width: 60px;
+            color: #999;
+        }
+        
+        #productDetail-screen .spec-value {
+            flex: 1;
+            color: #333;
+        }
+        
+        #productDetail-screen .purchase-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+            padding: 0 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            border-top: 1px solid #f0f0f0;
+            z-index: 100;
+        }
+        
+        #productDetail-screen .action-buttons {
+            display: flex;
+        }
+        
+        #productDetail-screen .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 44px;
+            height: 50px;
+            margin-right: 5px;
+        }
+        
+        #productDetail-screen .action-btn .icon {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+        
+        #productDetail-screen .action-btn .label {
+            font-size: 10px;
+            color: #999;
+        }
+        
+        #productDetail-screen .purchase-buttons {
+            display: flex;
+            align-items: center;
+        }
+        
+        #productDetail-screen .contact-btn {
+            height: 36px;
+            padding: 0 15px;
+            background-color: #f5f5f5;
+            color: #333;
+            border: none;
+            border-radius: 18px;
+            font-size: 12px;
+            margin-right: 10px;
+            cursor: pointer;
+            white-space: nowrap; /* 防止文字换行 */
+        }
+        
+        #productDetail-screen .buy-btn {
+            height: 36px;
+            padding: 0 20px;
+            background-color: #ff4d4f;
+            color: white;
+            border: none;
+            border-radius: 18px;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap; /* 防止文字换行 */
+        }
+        
+        #productDetail-screen .free-price-tag {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            margin-top: 10px;
+            position: relative;
+            height: 40px;
+        }
+        
+        #productDetail-screen .free-package-text {
+            color: #4CAF50;
+            font-size: 22px;
+            font-weight: 700;
+            background-color: rgba(76, 175, 80, 0.15);
+            border: 2px solid #4CAF50;
+            border-radius: 6px;
+            padding: 8px 12px;
+            display: inline-block;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 6px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+        
+        #productDetail-screen .free-package-text:before {
+            content: '';
+            position: absolute;
+            top: -12px;
+            left: 30px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 12px solid #4CAF50;
+        }
+
+        /* 添加图片加载失败时的样式 */
+        #productDetail-screen .product-image.error {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #666;
+            border: 1px dashed #ddd;
+        }
+
+        /* 增加图片加载中的动画和样式 */
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .loading-text {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+        }
+        
+        /* 单品详情弹窗样式 */
+        .modal-overlay {
+            display: none;
+            position: absolute; /* 使用absolute而不是fixed，相对于父元素定位 */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+        }
+        
+        .modal-content {
+            width: 90%;
+            max-width: 300px; /* 限制最大宽度,使其完全适应手机屏幕 */
+            max-height: 70vh; /* 限制最大高度,留出刘海和底部指示条的空间 */
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            margin: 60px auto 40px; /* 调整上下边距,避开刘海和底部指示条 */
+        }
+        
+        /* 针对手机模拟器的特殊处理 */
+        .iphone-container .modal-overlay {
+            border-radius: 0; /* 去掉圆角,完全匹配手机内部区域 */
+            overflow: hidden;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        
+        .modal-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .close-modal-btn {
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: #999;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 15px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .modal-image-container {
+            width: 100%;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .modal-image-container img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        
+        .modal-details {
+            padding: 0 5px;
+        }
+        
+        .detail-row {
+            display: flex;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .detail-label {
+            width: 80px;
+            color: #666;
+            flex-shrink: 0;
+        }
+        
+        .detail-value {
+            flex: 1;
+            color: #333;
+        }
+        
+        .detail-link {
+            color: #1890ff;
+            text-decoration: none;
+        }
+        
+        .modal-footer {
+            padding: 15px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .modal-action-btn {
+            padding: 8px 15px;
+            border-radius: 4px;
+            border: 1px solid #d9d9d9;
+            background-color: white;
+            color: #333;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .modal-action-btn:hover {
+            border-color: #ff4d4f;
+            color: #ff4d4f;
+        }
+        
+        .modal-action-btn.primary {
+            background-color: #ff4d4f;
+            border-color: #ff4d4f;
+            color: white;
+        }
+        
+        .modal-action-btn.primary:hover {
+            background-color: #ff7875;
+            border-color: #ff7875;
+            color: white;
+        }
+        
+        /* 响应式适配 */
+        @media (max-width: 480px) {
+            .modal-content {
+                width: 95%;
+                max-height: 90vh;
+            }
+            
+            .detail-row {
+                flex-direction: column;
+                margin-bottom: 15px;
+            }
+            
+            .detail-label {
+                width: 100%;
+                margin-bottom: 2px;
+            }
+        }
+
+        /* 添加悬浮按钮样式 */
+        .ai-floating-btn {
+            position: absolute; /* 修改为absolute而不是fixed */
+            bottom: 80px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background-color: #007AFF;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            z-index: 1000;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            }
+        }
+        
+        .ai-floating-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* 自定义场景区域 */
+        .custom-scene-area {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 6px;
+            padding: 3px 0;
+            opacity: 0.85;
+        }
+
+        /* 场景添加按钮 */
+        .scene-add-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: white;
+            border: 1px solid #86868B;
+            color: #86868B;
+            font-size: 18px;
+            font-weight: normal;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 5px;
+        }
+
+        .scene-add-btn:hover {
+            background-color: #F2F2F7;
+            color: #666666;
+            transform: scale(1.05);
+        }
+
+        .scene-add-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 帮助图标 */
+        .help-icon.scene-help {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #F6F6F6;
+            color: #999999;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .scene-help-tooltip {
+            position: absolute;
+            left: 24px;
+            top: -5px;
+            width: 180px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            z-index: 1000;
+            text-align: left;
+        }
+
+        .help-icon.scene-help:hover .scene-help-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* 自定义场景弹窗 */
+        .custom-scene-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+        }
+        
+        .custom-scene-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .custom-scene-content {
+            width: 85%;
+            max-width: 320px;
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .custom-scene-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .custom-scene-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .custom-scene-form {
+            padding: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .form-group input, 
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .form-group textarea {
+            height: 80px;
+            resize: none;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .cancel-btn {
+            padding: 8px 15px;
+            background-color: #f2f2f2;
+            border: none;
+            border-radius: 8px;
+            color: #333;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .confirm-btn {
+            padding: 8px 15px;
+            background-color: #FF5252;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .cancel-btn:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .confirm-btn:hover {
+            background-color: #ff3939;
+        }
+        
+        /* 自定义场景按钮 */
+        .scene-btn.custom {
+            background-color: #F2F2F7;
+            color: #666666;
+        }
+        
+        .scene-btn.custom.active {
+            background-color: #86868B;
+            color: white;
+        }
+        
+        /* 确认删除弹窗 */
+        .confirm-delete-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+        }
+        
+        .confirm-delete-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .confirm-delete-content {
+            width: 75%;
+            background-color: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .confirm-delete-content h4 {
+            margin-top: 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .confirm-delete-content p {
+            margin: 15px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .confirm-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .delete-btn {
+            padding: 8px 15px;
+            background-color: #F44336;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+
+        .scene-btn {
+            padding: 8px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(0,0,0,0.05);
+            font-size: 12px;
+            color: #1D1D1F;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            writing-mode: horizontal-tb !important;
+            text-orientation: mixed !important;
+            height: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            width: 100%;
+            margin: 0;
+        }
+        
+        .scene-btn.active {
+            background-color: #007AFF;
+            color: #FFFFFF;
+            transform: translateX(-4px);
+        }
+        
+        /* 调整场景选择器的样式 */
+        .scene-selector {
+            width: 65px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 恢复原型导航 -->
+    <nav class="prototype-nav" style="display: block !important; position: fixed; top: 10px; left: 10px; z-index: 1000; background-color: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+        <h2>界面原型</h2>
+        <ul>
+            <li><button onclick="showScreen('home')">首页</button></li>
+            <li><button onclick="showScreen('wardrobe')">衣橱管理</button></li>
+            <li><button onclick="showScreen('social')">社交页面</button></li>
+            <li><button onclick="showScreen('size-profile')">尺码档案页面</button></li>
+            <li><button onclick="showScreen('profile')">个人中心</button></li>
+            <li><button onclick="showScreen('productDetail')">电商详情页</button></li>
+        </ul>
+    </nav>
+
+    <!-- 首页原型 -->
+    <div class="iphone-container">
+        <div class="iphone-notch"></div>
+        <div class="container" id="home-screen">
+            <!-- 原有的首页内容 -->
+            <div class="header">
+                <div class="title-weather">
+                    <div class="login-button" id="loginButton">
+                        <span class="login-text">登录</span>
+                        <span class="login-icon-default">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="#007AFF"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <h1>今日推荐</h1>
+                    <div class="weather-info">
+                        <span>北京</span>
+                        <span>🌤</span>
+                        <span>23°</span>
+                    </div>
+                </div>
+                <div class="identity-selector-container">
+                    <div class="identity-selector">
+                        <select>
+                            <option selected>本人</option>
+                            <option>老公</option>
+                            <option>孩子</option>
+                            <option>宠物</option>
+                        </select>
+                    </div>
+                    <label class="family-option">
+                        <input type="checkbox" id="familyStyleCheck">
+                        <span class="family-text">家庭</span>
+                        <span class="help-icon">?
+                            <span class="help-tooltip">勾选后，不同身份的推荐搭配将保持统一风格，为您的全家人提供协调的穿搭方案。不勾选则会根据每个成员的个性提供多样化的推荐。</span>
+                        </span>
+                    </label>
+                </div>
+                <div class="items-header">
+                    <span class="items-title">单品</span>
+                    <button class="filter-btn" onclick="showFilterModal()">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <main class="main-content">
+                <div class="scene-selector">
+                    <button class="scene-btn active">适勤</button>
+                    <button class="scene-btn">商务</button>
+                    <button class="scene-btn">休闲</button>
+                    <button class="scene-btn">聚会</button>
+                    <div class="custom-scene-area">
+                        <button class="scene-add-btn" title="添加自定义场景">
+                            <span>+</span>
+                        </button>
+                        <div class="help-icon scene-help" title="添加自定义场景">
+                            ?
+                            <div class="scene-help-tooltip">
+                                点击加号可以添加自定义场景，根据您的需求创建专属推荐
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="model-display">
+                    <img class="model-image" src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&h=1200&fit=crop" alt="模特展示">
+                    
+                    <!-- 单品热区 -->
+                    <div class="item-hotspots">
+                        <!-- 上衣热区 -->
+                        <div class="item-hotspot" 
+                             data-item-id="1" 
+                             data-item-name="时尚衬衫" 
+                             data-item-type="self" 
+                             data-item-location="衣柜第一层" 
+                             data-item-date="2023-05-15" 
+                             data-item-desc="白色纯棉衬衫，适合商务场合">
+                            <div class="hotspot-dot"></div>
+                        </div>
+                        
+                        <!-- 裤子热区 -->
+                        <div class="item-hotspot" 
+                             data-item-id="2" 
+                             data-item-name="休闲长裤" 
+                             data-item-type="self" 
+                             data-item-location="衣柜第二层" 
+                             data-item-date="2023-04-20" 
+                             data-item-desc="黑色休闲长裤，舒适面料">
+                            <div class="hotspot-dot"></div>
+                        </div>
+                        
+                        <!-- 鞋子热区 -->
+                        <div class="item-hotspot" 
+                             data-item-id="3" 
+                             data-item-name="商务皮鞋" 
+                             data-item-type="ai" 
+                             data-item-price="¥799" 
+                             data-item-brand="某知名品牌" 
+                             data-item-link="https://example.com/shoes" 
+                             data-item-desc="黑色商务皮鞋，简约大方">
+                            <div class="hotspot-dot"></div>
+                        </div>
+                        
+                        <!-- 配饰热区 -->
+                        <div class="item-hotspot" 
+                             data-item-id="4" 
+                             data-item-name="休闲腕表" 
+                             data-item-type="ai" 
+                             data-item-price="¥1299" 
+                             data-item-brand="某奢侈品牌" 
+                             data-item-link="https://example.com/watch" 
+                             data-item-desc="黑色表盘金属表带，适合各种场合">
+                            <div class="hotspot-dot"></div>
+                        </div>
+                        
+                        <!-- LV包热区 -->
+                        <div class="item-hotspot" 
+                             data-item-id="5" 
+                             data-item-name="LV无忧二奢包" 
+                             data-item-type="ai" 
+                             data-item-price="¥0" 
+                             data-item-brand="Louis Vuitton" 
+                             data-item-link="https://example.com/luxurybag" 
+                             data-item-desc="二手奢侈品LV包，零元免费领取，品质保证无忧使用，限时推广活动">
+                            <div class="hotspot-dot"></div>
+                        </div>
+                    </div>
+                    <!-- 新增收藏按钮 - 左下角 -->
+                    <button class="favorite-btn" id="favoriteBtn" title="收藏搭配">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                        </svg>
+                    </button>
+                    <!-- 新增分享按钮 - 右上角 -->
+                    <button class="share-btn" id="shareBtn" title="分享搭配">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" fill="white"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="items-display">
+                    <div class="items-content">
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品1">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品2">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品3">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=120&h=120&fit=crop" alt="单品4">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品5">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品6">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=120&h=120&fit=crop" alt="单品7">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品8">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品9">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品10">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品11">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品12">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=120&h=120&fit=crop" alt="单品13">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品14">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品15">
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn upload-btn" id="uploadBtn">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2v20M2 12h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button class="nav-btn" id="aiBtn">
+                    <span class="nav-icon">AI</span>
+                </button>
+                <button class="nav-btn active" id="wardrobeBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 4.8V19.2C21 20.19 20.19 21 19.2 21H4.8C3.81 21 3 20.19 3 19.2V4.8C3 3.81 3.81 3 4.8 3H19.2C20.19 3 21 3.81 21 4.8ZM12 8V16M8 8V16M16 8V16" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <span>衣橱</span>
+                </button>
+                <button class="nav-btn" id="socialBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>社交</span>
+                </button>
+            </nav>
+        </div>
+        
+        <div class="iphone-home-indicator"></div>
+        
+        <!-- 上传选项弹窗 - 移到iPhone容器内 -->
+        <div class="upload-options-modal" id="uploadOptionsModal">
+            <div class="upload-options-content">
+                <h3>选择上传方式</h3>
+                <button class="upload-option-btn" id="option-camera">
+                    <span class="option-icon">📷</span>
+                    <span class="option-text">拍照上传</span>
+                </button>
+                <button class="upload-option-btn" id="option-gallery">
+                    <span class="option-icon">🖼️</span>
+                    <span class="option-text">相册图片</span>
+                </button>
+                <button class="upload-option-btn" id="option-thirdparty">
+                    <span class="option-icon">🛍️</span>
+                    <span class="option-text">第三方平台获取</span>
+                </button>
+                <button class="close-upload-modal" onclick="closeUploadOptionsModal()">取消</button>
+            </div>
+        </div>
+
+        <!-- 筛选弹窗（移到iPhone容器内） -->
+        <div class="filter-modal" id="filterModal" style="display: none;">
+            <div class="filter-content">
+                <div class="filter-header">
+                    <h3>筛选</h3>
+                    <button class="close-btn" onclick="closeFilterModal()">×</button>
+                </div>
+                <div class="filter-options">
+                    <div class="filter-group">
+                        <h4>归属人</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="owner-select">
+                                <option value="全部" selected>全部</option>
+                                <option value="本人">本人</option>
+                                <option value="配偶">配偶</option>
+                                <option value="孩子">孩子</option>
+                                <option value="宠物">宠物</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>类别</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="category-select">
+                                <option value="" selected>请选择</option>
+                                <option value="上衣">上衣</option>
+                                <option value="裤子">裤子</option>
+                                <option value="裙子">裙子</option>
+                                <option value="外套">外套</option>
+                                <option value="礼服">礼服</option>
+                                <option value="鞋履">鞋履</option>
+                                <option value="配饰">配饰</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>颜色</h4>
+                        <div class="filter-select-container" id="color-select-container">
+                            <select class="filter-select" id="color-select">
+                                <option value="" selected>请选择</option>
+                                <option value="#000000" data-color="#000000">黑色</option>
+                                <option value="#FFFFFF" data-color="#FFFFFF">白色</option>
+                                <option value="#FF3B30" data-color="#FF3B30">红色</option>
+                                <option value="#FF9500" data-color="#FF9500">橙色</option>
+                                <option value="#FFCC00" data-color="#FFCC00">黄色</option>
+                                <option value="#34C759" data-color="#34C759">绿色</option>
+                                <option value="#5AC8FA" data-color="#5AC8FA">浅蓝</option>
+                                <option value="#007AFF" data-color="#007AFF">蓝色</option>
+                                <option value="#5856D6" data-color="#5856D6">紫色</option>
+                                <option value="#AF52DE" data-color="#AF52DE">紫红</option>
+                                <option value="#FF2D55" data-color="#FF2D55">粉色</option>
+                                <option value="#A2845E" data-color="#A2845E">棕色</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>季节</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="season-select">
+                                <option value="" selected>请选择</option>
+                                <option value="春季">春季</option>
+                                <option value="夏季">夏季</option>
+                                <option value="秋季">秋季</option>
+                                <option value="冬季">冬季</option>
+                                <option value="四季">四季</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>场合</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="occasion-select">
+                                <option value="" selected>请选择</option>
+                                <option value="正式">正式</option>
+                                <option value="休闲">休闲</option>
+                                <option value="职场">职场</option>
+                                <option value="运动">运动</option>
+                                <option value="家居">家居</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-actions">
+                    <button class="reset-btn" onclick="resetFilters()">重置</button>
+                    <button class="confirm-btn" onclick="applyFilters()">确定</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 信息卡片弹窗 -->
+        <div class="info-modal" id="infoModal">
+            <div class="info-card">
+                <button class="close-modal" onclick="closeInfoModal()">×</button>
+                <img id="modalImage" src="" alt="单品详情">
+                <h3 id="modalTitle"></h3>
+                
+                <!-- 添加单品详细信息区域 -->
+                <div id="itemDetails">
+                    <!-- 自有单品信息 -->
+                    <div id="selfItemInfo" class="item-info-section">
+                        <div class="info-row">
+                            <span class="info-label">存放位置:</span>
+                            <span id="itemLocation" class="info-value"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">上传/购买日期:</span>
+                            <span id="itemDate" class="info-value"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- AI推荐单品信息 -->
+                    <div id="aiItemInfo" class="item-info-section">
+                        <div class="info-row">
+                            <span class="info-label">价格:</span>
+                            <span id="itemPrice" class="info-value"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">品牌:</span>
+                            <span id="itemBrand" class="info-value"></span>
+                        </div>
+                        <div class="info-row">
+                            <a id="itemLink" class="detail-link" href="javascript:void(0);" onclick="showScreen('productDetail'); return false;">查看详情</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <p id="modalDesc"></p>
+            </div>
+        </div>
+
+        <!-- 底部处理状态提示 -->
+        <div id="bottomProcessingStatus" class="processing-toast" style="display: none;">
+            <div class="processing-spinner"></div>
+            <span>正在处理图片...</span>
+        </div>
+    </div>
+
+    <!-- 衣橱管理原型 -->
+    <div class="iphone-container">
+        <div class="iphone-notch"></div>
+        <div class="container" id="wardrobe-screen">
+            <header class="header wardrobe-header">
+                <h1 class="wardrobe-title">我的衣橱 ></h1>
+                
+                <button class="search-btn" onclick="toggleSearch()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 6h18M3 12h18M3 18h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </header>
+            
+            <!-- 搜索模态框移至这里 -->
+            <div class="search-modal" id="searchModal">
+                <div class="search-modal-content">
+                    <div class="search-header">
+                        <h3>搜索单品</h3>
+                        <button class="close-search-btn" onclick="toggleSearch()">×</button>
+                    </div>
+                    <div class="search-input-container">
+                        <input type="text" placeholder="输入关键词..." id="searchInput">
+                        <button class="search-action-btn">搜索</button>
+                    </div>
+                    <div class="search-filters">
+                        <h4>筛选条件</h4>
+                        <div class="filter-group">
+                            <label>季节</label>
+                            <div class="filter-options">
+                                <button class="filter-option">春</button>
+                                <button class="filter-option">夏</button>
+                                <button class="filter-option">秋</button>
+                                <button class="filter-option">冬</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>分类</label>
+                            <div class="filter-options">
+                                <button class="filter-option">上衣</button>
+                                <button class="filter-option">裤子</button>
+                                <button class="filter-option">鞋子</button>
+                                <button class="filter-option">包包</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>颜色</label>
+                            <div class="color-options">
+                                <button class="color-option" style="background-color: #000000;"></button>
+                                <button class="color-option" style="background-color: #FFFFFF; border: 1px solid #CCCCCC;"></button>
+                                <button class="color-option" style="background-color: #FF0000;"></button>
+                                <button class="color-option" style="background-color: #0000FF;"></button>
+                                <button class="color-option" style="background-color: #FFFF00;"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="search-actions">
+                        <button class="reset-btn">重置</button>
+                        <button class="confirm-btn">确定</button>
+                    </div>
+                </div>
+            </div>
+
+            <main class="wardrobe-content">
+                <div class="stats-charts">
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                        <p class="chart-title">单品分类</p>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="colorChart"></canvas>
+                        <p class="chart-title">颜色分布</p>
+                    </div>
+                </div>
+                
+                <div class="category-tabs-container">
+                    <!-- 左侧滑动箭头 -->
+                    <button class="category-scroll-arrow category-scroll-left" id="scrollLeftBtn">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M15 6l-6 6 6 6" />
+                        </svg>
+                    </button>
+                    
+                    <div class="category-tabs sortable">
+                        <button class="category-tab active" data-category="all">
+                            <span class="category-name">全部</span>
+                            <span class="category-count">128</span>
+                        </button>
+                        <button class="category-tab" data-category="tops">
+                            <span class="category-name">上衣</span>
+                            <span class="category-count">42</span>
+                        </button>
+                        <button class="category-tab" data-category="bottoms">
+                            <span class="category-name">裤子</span>
+                            <span class="category-count">38</span>
+                        </button>
+                        <button class="category-tab" data-category="shoes">
+                            <span class="category-name">鞋子</span>
+                            <span class="category-count">24</span>
+                        </button>
+                        <button class="category-tab" data-category="bags">
+                            <span class="category-name">包包</span>
+                            <span class="category-count">16</span>
+                        </button>
+                        <button class="category-tab" data-category="accessories">
+                            <span class="category-name">配饰</span>
+                            <span class="category-count">8</span>
+                        </button>
+                        <button class="category-tab" data-category="outerwear">
+                            <span class="category-name">外套</span>
+                            <span class="category-count">12</span>
+                        </button>
+                        <button class="category-tab" data-category="dresses">
+                            <span class="category-name">连衣裙</span>
+                            <span class="category-count">6</span>
+                        </button>
+                    </div>
+                    
+                    <!-- 右侧滑动箭头 -->
+                    <button class="category-scroll-arrow category-scroll-right" id="scrollRightBtn">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="item-grid">
+                    <div class="wardrobe-item" data-category="tops">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=150&h=150&fit=crop" alt="白色衬衫">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="tops">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=150&h=150&fit=crop" alt="黑色T恤">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="tops">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1588359348343-8ebdea9fcb91?w=150&h=150&fit=crop" alt="灰色卫衣">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="tops">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=150&h=150&fit=crop" alt="条纹衫">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="bottoms">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1542272604-787c3835535d?w=150&h=150&fit=crop" alt="黑色长裤">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="bottoms">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=150&h=150&fit=crop" alt="牛仔裤">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="shoes">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1605812860427-4024433a70fd?w=150&h=150&fit=crop" alt="黑色皮鞋">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="shoes">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=150&h=150&fit=crop" alt="红色运动鞋">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="bags">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=150&h=150&fit=crop" alt="手提包">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1619946794135-5bc917a27793?w=150&h=150&fit=crop" alt="腕表">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=150&h=150&fit=crop" alt="项链">
+                        </div>
+                    </div>
+                    <!-- 新增更多配饰项目 -->
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=150&h=150&fit=crop" alt="太阳镜">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=150&h=150&fit=crop" alt="贝雷帽">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=150&h=150&fit=crop" alt="围巾">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1613152184920-bc1c4ab468f6?w=150&h=150&fit=crop" alt="耳环">
+                        </div>
+                    </div>
+                    <div class="wardrobe-item" data-category="accessories">
+                        <div class="item-img">
+                            <img src="https://images.unsplash.com/photo-1620625515032-6ed0c1790c75?w=150&h=150&fit=crop" alt="手链">
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn upload-btn" id="uploadBtn">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2v20M2 12h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button class="nav-btn" id="aiBtn">
+                    <span class="nav-icon">AI</span>
+                </button>
+                <button class="nav-btn active" id="wardrobeBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 4.8V19.2C21 20.19 20.19 21 19.2 21H4.8C3.81 21 3 20.19 3 19.2V4.8C3 3.81 3.81 3 4.8 3H19.2C20.19 3 21 3.81 21 4.8ZM12 8V16M8 8V16M16 8V16" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <span>衣橱</span>
+                </button>
+                <button class="nav-btn" id="socialBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>社交</span>
+                </button>
+            </nav>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+
+    <!-- 社交页面原型 -->
+    <div class="iphone-container" id="social-container">
+        <div class="iphone-notch"></div>
+        <div class="container" id="social-screen">
+            <!-- 顶部导航和搜索区域 -->
+            <div class="social-top-section">
+                <div class="search-bar">
+                    <input type="text" placeholder="搜索穿搭、风格..." id="socialSearchInput">
+                    <button class="search-icon-btn" id="socialSearchBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M21 21L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <div class="search-keywords">
+                        <span class="keyword" data-keyword="时尚搭配">时尚搭配</span>
+                        <span class="keyword" data-keyword="春季穿搭">春季穿搭</span>
+                        <span class="keyword" data-keyword="休闲风格">休闲风格</span>
+                </div>
+                </div>
+                
+                <!-- 个性化推荐部分 -->
+                <div class="recommendation-section">
+                    <div class="recommendation-header">
+                        <h3 class="recommendation-title">个性推荐</h3>
+                        <button class="recommendation-more" id="recommendMoreBtn">more</button>
+                    </div>
+                    <div class="recommendation-slider">
+                        <div class="recommendation-item">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=300&h=450&fit=crop" alt="推荐搭配1">
+                            <button class="collect-btn">
+                                <svg class="star-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span class="collect-count">23</span>
+                            </button>
+                        </div>
+                        <div class="recommendation-item">
+                            <img src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=300&h=450&fit=crop" alt="推荐搭配2">
+                            <button class="collect-btn">
+                                <svg class="star-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span class="collect-count">42</span>
+                            </button>
+                        </div>
+                        <div class="recommendation-item">
+                            <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=300&h=450&fit=crop" alt="推荐搭配3">
+                            <button class="collect-btn">
+                                <svg class="star-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span class="collect-count">37</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 内容区域 -->
+            <div class="social-content-section">
+                <!-- 统计信息 - 移动到标签上方 -->
+                <div class="social-stats">
+                    <div class="stat-item" id="likesCount">
+                        <div class="stat-number">128</div>
+                        <div class="stat-label">获赞</div>
+                    </div>
+                    <div class="stat-item" id="followingCount">
+                        <div class="stat-number">56</div>
+                        <div class="stat-label">关注</div>
+                    </div>
+                    <div class="stat-item" id="mutualCount">
+                        <div class="stat-number">32</div>
+                        <div class="stat-label">互关</div>
+                    </div>
+                    <div class="stat-item" id="favoritesCount">
+                        <div class="stat-number">95</div>
+                        <div class="stat-label">收藏</div>
+                    </div>
+                </div>
+                
+                <div class="social-tabs">
+                    <button class="social-tab active" data-tab="discover">发现</button>
+                    <button class="social-tab" data-tab="follow">关注</button>
+                    <button class="social-tab" data-tab="collection">收藏</button>
+                    <button class="social-tab" data-tab="myshare">我的分享</button>
+                </div>
+                
+                <!-- 发现内容 -->
+                <div class="social-tab-content active" id="discover-content">
+                <div class="outfit-grid">
+                    <div class="outfit-card">
+                        <div class="outfit-image">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=300&h=450&fit=crop" alt="搭配1">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        128
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        32
+                                    </span>
+                        </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/women_42.jpg" alt="用户头像">
+                                <span class="user-name">张小姐</span>
+                                <span class="user-level">Lv.5 时尚达人</span>
+                        </div>
+                    </div>
+                    <div class="outfit-card">
+                        <div class="outfit-image">
+                            <img src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=300&h=450&fit=crop" alt="搭配2">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        95
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        28
+                                    </span>
+                        </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/men_32.jpg" alt="用户头像">
+                                <span class="user-name">李先生</span>
+                                <span class="user-level">Lv.4 时尚博主</span>
+                        </div>
+                    </div>
+                    <div class="outfit-card">
+                        <div class="outfit-image">
+                            <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=300&h=450&fit=crop" alt="搭配3">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        145
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        42
+                                    </span>
+                        </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/women_28.jpg" alt="用户头像">
+                                <span class="user-name">王小姐</span>
+                                <span class="user-level">Lv.6 时尚大咖</span>
+                        </div>
+                    </div>
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=300&h=450&fit=crop" alt="搭配4">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        76
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        18
+                                    </span>
+                </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/men_42.jpg" alt="用户头像">
+                                <span class="user-name">赵先生</span>
+                                <span class="user-level">Lv.3 穿搭爱好者</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="more-content-btn">more</button>
+                </div>
+                
+                <!-- 关注内容 -->
+                <div class="social-tab-content" id="follow-content">
+                    <div class="outfit-grid">
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=300&h=450&fit=crop" alt="关注搭配1">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        112
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        27
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/women_22.jpg" alt="用户头像">
+                                <span class="user-name">刘小姐</span>
+                                <span class="user-level">Lv.5 时尚达人</span>
+                            </div>
+                        </div>
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1509631179647-0177331693ae?w=300&h=450&fit=crop" alt="关注搭配2">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        88
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        22
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/men_22.jpg" alt="用户头像">
+                                <span class="user-name">陈先生</span>
+                                <span class="user-level">Lv.4 时尚博主</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="more-content-btn">more</button>
+                </div>
+                
+                <!-- 收藏内容 -->
+                <div class="social-tab-content" id="collection-content">
+                    <div class="outfit-grid">
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1503185912284-5271ff81b9a8?w=300&h=450&fit=crop" alt="收藏搭配1">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        156
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        48
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/women_33.jpg" alt="用户头像">
+                                <span class="user-name">吴小姐</span>
+                                <span class="user-level">Lv.6 时尚大咖</span>
+                            </div>
+                        </div>
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=300&h=450&fit=crop" alt="收藏搭配2">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        128
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        32
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="user-info">
+                                <img class="user-avatar" src="images/women_42.jpg" alt="用户头像">
+                                <span class="user-name">张小姐</span>
+                                <span class="user-level">Lv.5 时尚达人</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="more-content-btn">more</button>
+                </div>
+                
+                <!-- 我的分享内容 -->
+                <div class="social-tab-content" id="myshare-content">
+                    <div class="outfit-grid">
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1550614000-4895a10e1bfd?w=300&h=450&fit=crop" alt="我的分享1">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        78
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        23
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="user-info">
+                                <span class="share-date">2023年5月15日</span>
+                            </div>
+                        </div>
+                        <div class="outfit-card">
+                            <div class="outfit-image">
+                                <img src="https://images.unsplash.com/photo-1588359348343-8ebdea9fcb91?w=300&h=450&fit=crop" alt="我的分享2">
+                                <div class="outfit-stats-overlay">
+                                    <span class="like-count">
+                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        62
+                                    </span>
+                                    <span class="favorite-count">
+                                        <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-width="2" fill="none"/>
+                                        </svg>
+                                        18
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="user-info">
+                                <span class="share-date">2023年4月22日</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="more-content-btn">more</button>
+                </div>
+            </div>
+
+            <!-- 底部导航 -->
+            <nav class="bottom-nav">
+                <button class="nav-btn upload-btn" id="uploadBtn">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2v20M2 12h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button class="nav-btn" id="aiBtn">
+                    <span class="nav-icon">AI</span>
+                </button>
+                <button class="nav-btn" id="wardrobeBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 4.8V19.2C21 20.19 20.19 21 19.2 21H4.8C3.81 21 3 20.19 3 19.2V4.8C3 3.81 3.81 3 4.8 3H19.2C20.19 3 21 3.81 21 4.8ZM12 8V16M8 8V16M16 8V16" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <span>衣橱</span>
+                </button>
+                <button class="nav-btn active" id="socialBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>社交</span>
+                </button>
+            </nav>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+
+    <!-- 社交穿搭详情页弹窗 -->
+    <div class="outfit-detail-modal" id="outfitDetailModal" style="display: none;">
+        <div class="outfit-detail-content">
+            <button class="close-btn" onclick="closeOutfitDetailModal()" type="button">×</button>
+            <button class="back-btn" onclick="closeOutfitDetailModal()" type="button">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <div class="outfit-detail-image" id="detailItemsList">
+                <img src="" alt="穿搭大图" id="detailOutfitImage">
+                    </div>
+            <div class="outfit-detail-info">
+                <div class="detail-user-info">
+                    <img class="detail-user-avatar" src="" id="detailUserAvatar" alt="用户头像">
+                    <div class="detail-user-text">
+                        <span class="detail-user-name" id="detailUserName"></span>
+                        <span class="detail-user-level" id="detailUserLevel"></span>
+                    </div>
+                    <button class="follow-btn" id="detailFollowBtn">关注</button>
+                    </div>
+                
+                <div class="detail-stats">
+                    <span class="detail-like-count">
+                        <svg class="heart-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                        <span id="detailLikeCount"></span>
+                    </span>
+                    <span class="detail-favorite-count">
+                        <svg class="star-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                        <span id="detailFavoriteCount"></span>
+                    </span>
+                    <span class="detail-share-count">
+                        <svg class="share-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span id="detailShareCount"></span>
+                    </span>
+                    </div>
+                
+                <div class="detail-description" id="detailDescription">
+                    今日推荐的春季穿搭，简约自然风格，适合日常通勤或休闲场合...
+                </div>
+                
+                <div class="detail-comments">
+                    <h4>评论 (<span id="detailCommentsCount">32</span>)</h4>
+                    <div class="detail-comments-list" id="detailCommentsList">
+                        <div class="comment-item">
+                            <img class="comment-user-avatar" src="images/women_68.jpg" alt="评论用户头像">
+                            <div class="comment-content">
+                                <div class="comment-user-name">林小姐</div>
+                                <div class="comment-text">非常喜欢这套搭配，已经收藏了！</div>
+                                <div class="comment-time">2023-05-20 14:32</div>
+                    </div>
+                    </div>
+                        <div class="comment-item">
+                            <img class="comment-user-avatar" src="images/men_68.jpg" alt="评论用户头像">
+                            <div class="comment-content">
+                                <div class="comment-user-name">周先生</div>
+                                <div class="comment-text">请问上衣是什么牌子的？很合我的风格。</div>
+                                <div class="comment-time">2023-05-19 18:45</div>
+                    </div>
+                    </div>
+                    </div>
+                    <div class="comment-input">
+                        <input type="text" placeholder="添加评论..." id="commentInput">
+                        <button class="send-comment-btn">发送</button>
+                    </div>
+                </div>
+                
+                <div class="detail-actions">
+                    <button class="action-btn like-action" id="detailLikeBtn">
+                        <svg class="heart-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                        <span>点赞</span>
+                    </button>
+                    <button class="action-btn favorite-action" id="detailFavoriteBtn">
+                        <svg class="star-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                        <span>收藏</span>
+                    </button>
+                    <button class="action-btn share-action" id="detailShareBtn">
+                        <svg class="share-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>分享</span>
+                    </button>
+                    </div>
+                    </div>
+                    </div>
+                </div>
+                
+    <!-- 单品热点弹窗 -->
+    <div class="item-hotspot-modal" id="itemHotspotModal" style="display: none;">
+        <div class="hotspot-content">
+            <button class="close-btn" onclick="closeItemHotspotModal()">×</button>
+            <button class="back-btn" onclick="closeItemHotspotModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+            <div class="hotspot-item-info">
+                <div class="hotspot-item-image">
+                    <img src="" id="hotspotItemImage" alt="单品图片">
+                </div>
+                <div class="hotspot-item-details">
+                    <h3 id="hotspotItemName">时尚衬衫</h3>
+                    <div class="hotspot-item-brand" id="hotspotItemBrand">某知名品牌</div>
+                    <div class="hotspot-item-price" id="hotspotItemPrice">¥299</div>
+                    <div class="hotspot-item-desc" id="hotspotItemDesc">白色纯棉衬衫，适合商务场合</div>
+                    <a href="#" class="hotspot-item-link" id="hotspotItemLink" target="_blank">查看购买链接</a>
+                    <p class="affiliate-note">通过该链接购买，分享者可获得佣金</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 个人中心原型（其他内容省略） -->
+    <div class="iphone-container">
+        <div class="iphone-notch"></div>
+        <div class="container" id="profile-screen" style="background: linear-gradient(to bottom, #fff5e1, #f8f8f8 30%); padding-top: 0;">
+            <!-- 个人中心内容 -->
+            <div class="profile-page-content">
+                <!-- 顶部导航条 -->
+                <div class="profile-top-bar">
+                    <button class="back-arrow-btn">‹</button> <!-- 使用简单字符代替图标 -->
+                    <a href="#" class="go-to-main-page-link">前往逛逛主页 ›</a>
+                </div>
+
+                <!-- 用户信息头 -->
+                <div class="profile-header">
+                    <div class="avatar-section">
+                        <img src="images/women_44.jpg" alt="用户头像" class="user-avatar-large">
+                        <span class="change-avatar-tag">换动态头像</span>
+                    </div>
+                    <div class="user-info-main">
+                        <div class="user-name-id">
+                            <span class="user-nickname">hi, rofee</span>
+                            <span class="user-id">rofee2009 <span class="brand-icon">品</span></span> <!-- 模拟品牌图标 -->
+                        </div>
+                        <div class="user-stats">
+                            <div class="stat"><span class="stat-num">72</span><span class="stat-label">关注</span></div>
+                            <div class="stat"><span class="stat-num">0</span><span class="stat-label">粉丝</span></div>
+                            <div class="stat"><span class="stat-num">0</span><span class="stat-label">好友</span></div>
+                        </div>
+                    </div>
+                    <button class="edit-profile-btn">编辑资料</button>
+                </div>
+
+                <!-- 淘气值卡片 -->
+                <div class="info-card taoqizhi-card">
+                    <span class="taoqizhi-value">淘气值 1145</span>
+                    <a href="#" class="vip-link">开88VIP享专属权益 ›</a>
+                </div>
+
+                <!-- 淘宝历程卡片 -->
+                <div class="info-card journey-card">
+                    <div class="journey-header">
+                        <span class="journey-title">淘宝历程</span>
+                        <span class="journey-date">注册日期 2011.04.13</span>
+                    </div>
+                    <div class="journey-stats">
+                        <div class="journey-stat-item">
+                            <span class="journey-stat-num">5100<span class="journey-stat-unit">天</span></span>
+                            <span class="journey-stat-label">注册天数</span>
+                        </div>
+                        <div class="journey-stat-item">
+                            <span class="journey-stat-num">2.71<span class="journey-stat-unit">万元</span></span>
+                            <span class="journey-stat-label">累计省钱 <span class="help-q">?</span></span>
+                        </div>
+                        <div class="journey-stat-item">
+                            <span class="journey-stat-num">1187<span class="journey-stat-unit">.72元</span></span>
+                            <span class="journey-stat-label">今年省钱 <span class="help-q">?</span></span>
+                        </div>
+                        <div class="journey-stat-item">
+                            <span class="journey-stat-num">618<span class="journey-stat-unit">.03元</span></span>
+                            <span class="journey-stat-label">本月消费 ›</span>
+                        </div>
+                    </div>
+                    <div class="achievement-section">
+                        <span class="achievement-title">成就勋章</span>
+                        <span class="achievement-count">3 / 498</span>
+                        <div class="achievement-icons">
+                            <span class="ach-icon">🏵️</span>
+                            <span class="ach-icon">👘</span>
+                            <span class="ach-icon">💎</span>
+                            <span class="ach-icon">💍</span>
+                            <span class="ach-icon">⚙️</span>
+                            <span class="ach-icon">🔩</span>
+                            <!-- 可以添加更多勋章图标 -->
+                        </div>
+                        <span class="achievement-arrow">›</span>
+                    </div>
+                </div>
+
+                <!-- 我的档案卡片 -->
+                <div class="info-card profile-details-card" onclick="showScreen('size-profile')" style="cursor: pointer;">
+                    <div class="profile-details-header">
+                        <span class="profile-details-title">我的档案</span>
+                        <span class="visibility-icon">👁️</span> <!-- 模拟眼睛图标 -->
+                    </div>
+
+                    <!-- 我的尺码 -->
+                    <div class="profile-item size-profile-item" onclick="event.stopPropagation(); showScreen('size-profile')" style="cursor: pointer;">
+                        <span class="profile-item-icon">👤</span> <!-- 模拟衣架/人图标 -->
+                        <span class="profile-item-title">我的尺码</span>
+                        <span class="profile-item-arrow">›</span>
+                    </div>
+                    <div class="size-summary" >
+                        <!-- <img src="assets/body-placeholder.png" alt="尺码档案图标" class="size-avatar-placeholder"> --> <!-- 替换为实际图片路径 -->
+                        <div class="size-text">
+                            <span class="size-title">我的尺码档案</span>
+                            <span class="size-info">165cm | 60kg | 37码 | 75B</span>
+                        </div>
+                    </div>
+
+                    <!-- AI试衣间 (已注释) -->
+                    <!-- <div class="profile-item ai-fitting-item" >
+                        <span class="profile-item-title ai-fitting-title">「AI试衣间」</span>
+                        <span class="profile-item-desc">用你的分身看上身效果，快来免费试穿！</span>
+                        <span class="profile-item-arrow">›</span>
+                    </div> -->
+
+                     <!-- 添加家人角色 -->
+                     <div class="profile-item add-family-item" >
+                        <span class="profile-item-icon">👨‍👩‍👧‍👦</span> <!-- 模拟家庭图标 -->
+                        <span class="profile-item-title">添加家人角色</span>
+                        <span class="profile-item-arrow">›</span>
+                    </div>
+
+                    <!-- 定制VR模特 -->
+                    <div class="profile-item customize-vr-model-item" >
+                        <span class="profile-item-icon">🧍</span> <!-- 模拟模特图标 -->
+                        <span class="profile-item-title">定制VR模特</span>
+                        <span class="profile-item-arrow">›</span>
+                    </div>
+
+                     <!-- 我的肤质 (已注释) -->
+                     <!-- <div class="profile-item skin-profile-item" >
+                        <span class="profile-item-icon">🧴</span>
+                        <span class="profile-item-title">我的肤质</span>
+                        <span class="profile-item-arrow">›</span>
+                    </div>
+                    <div class="skin-summary" >
+                        <span class="skin-text">完善肤质档案，推荐更精准哦！</span>
+                        <button class="fill-info-btn">去填写</button>
+                    </div> -->
+
+                </div>
+            </div>
+            <!-- 底部导航占位，假设个人中心也是通过底部导航访问 -->
+             <nav class="bottom-nav">
+                <button class="nav-btn upload-btn" id="uploadBtn">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2v20M2 12h20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button class="nav-btn" id="aiBtn">
+                    <span class="nav-icon">AI</span>
+                </button>
+                <button class="nav-btn" id="wardrobeBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 4.8V19.2C21 20.19 20.19 21 19.2 21H4.8C3.81 21 3 20.19 3 19.2V4.8C3 3.81 3.81 3 4.8 3H19.2C20.19 3 21 3.81 21 4.8ZM12 8V16M8 8V16M16 8V16" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <span>衣橱</span>
+                </button>
+                <button class="nav-btn" id="socialBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>社交</span>
+                </button>
+                 <!-- 添加个人中心按钮 -->
+                 <button class="nav-btn active" id="profileBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                       <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="currentColor"/>
+                     </svg>
+                     <span>我的</span>
+                 </button>
+            </nav>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+    
+    <!-- 电商详情页原型 -->
+    <div class="iphone-container" id="product-detail-container" style="display: none; z-index: 999;">
+        <div class="iphone-notch"></div>
+        <div class="container" id="productDetail-screen">
+            <!-- 删除顶部状态栏，直接改为商品主体内容 -->
+            <div class="product-scroll">
+                <!-- AI悬浮按钮 - 移至顶层容器 -->
+                <div class="ai-floating-btn" onclick="showScreen('home')">
+                    <span>AI</span>
+                </div>
+                
+                <!-- 添加浏览器安全提示 -->
+                <div class="browser-security-tip" style="margin: 10px; background: rgba(255, 255, 255, 0.9); padding: 10px; border-radius: 5px; font-size: 12px; z-index: 20; border: 1px solid #ddd; display: none;" id="browserTip">
+                    <div style="font-weight: bold; margin-bottom: 5px;">本地文件访问提示</div>
+                    <p>由于浏览器安全限制，使用file://协议打开页面时，可能无法加载本地图片。</p>
+                    <p><strong>解决方法：</strong></p>
+                    <ol style="padding-left: 20px; margin: 5px 0;">
+                        <li>使用本地服务器</li>
+                        <li>调整浏览器安全设置</li>
+                        <li>使用Data URL图片（当前方案）</li>
+                    </ol>
+                    <div style="text-align: center; margin-top: 5px;">
+                        <button onclick="document.getElementById('browserTip').style.display='none'" style="padding: 3px 8px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; cursor: pointer;">关闭</button>
+                        <button onclick="showBrowserSettings()" style="padding: 3px 8px; background: #4CAF50; color: white; border: 1px solid #4CAF50; border-radius: 3px; cursor: pointer; margin-left: 5px;">查看设置方法</button>
+                    </div>
+                </div>
+
+                <!-- 商品图片 -->
+                <div class="product-image-container">
+                    <div class="image-background"></div>
+                    
+                    <!-- SVG嵌入式LV包图片 - 不依赖外部文件 -->
+                    <svg width="300" height="300" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="opacity: 1; max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                        <defs>
+                            <pattern id="lvPattern" patternUnits="userSpaceOnUse" width="80" height="80">
+                                <rect width="80" height="80" fill="#e8d9b7"/>
+                                <!-- LV花纹 -->
+                                <circle cx="40" cy="40" r="15" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M10,10 L30,10 L30,30 L10,30 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M50,10 L70,10 L70,30 L50,30 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M10,50 L30,50 L30,70 L10,70 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M50,50 L70,50 L70,70 L50,70 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M15,15 L25,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M25,15 L15,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M55,15 L65,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M65,15 L55,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M15,55 L25,65" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M25,55 L15,65" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M55,55 L65,65" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M65,55 L55,65" stroke="#b48c64" stroke-width="2"/>
+                            </pattern>
+
+                            <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#e8d9b7;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#d5c395;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+
+                        <!-- 背景 -->
+                        <rect width="100%" height="100%" fill="#f5f5f5"/>
+                        
+                        <!-- 包的外形 -->
+                        <rect x="40" y="70" width="220" height="160" rx="20" ry="20" fill="url(#bagGradient)"/>
+                        <rect x="40" y="70" width="220" height="160" rx="20" ry="20" fill="url(#lvPattern)" fill-opacity="1"/>
+                        
+                        <!-- 包的结构线 -->
+                        <rect x="40" y="70" width="220" height="160" rx="20" ry="20" fill="none" stroke="#b48c64" stroke-width="2"/>
+                        <line x1="40" y1="100" x2="260" y2="100" stroke="#b48c64" stroke-width="1"/>
+                        <line x1="40" y1="200" x2="260" y2="200" stroke="#b48c64" stroke-width="1"/>
+                        
+                        <!-- 包的手柄 -->
+                        <path d="M90,70 Q90,40 150,40 Q210,40 210,70" fill="none" stroke="#b48c64" stroke-width="5"/>
+                        
+                        <!-- LV标志 -->
+                        <text x="150" y="150" font-family="serif" font-size="24" text-anchor="middle" fill="#8a6e50" font-weight="bold">
+                            LV
+                        </text>
+
+                        <!-- 包的边缘高光 -->
+                        <rect x="42" y="72" width="216" height="156" rx="18" ry="18" fill="none" stroke="white" stroke-width="0.5" opacity="0.6"/>
+
+                        <!-- 包的阴影 -->
+                        <rect x="50" y="232" width="200" height="10" rx="5" ry="5" fill="#00000022"/>
+                    </svg>
+                    
+                    <!-- 原图片标签保留，但使用display:none隐藏 -->
+                    <img class="product-image" 
+                         src="images/lv_bag.jpg" 
+                         alt="LV无忧包" 
+                         onload="imageLoaded(this)"
+                         onerror="handleImageError(this)" 
+                         style="display: none;">
+                         
+                    <div class="loading-spinner" id="imageSpinner" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="loading-text">加载中...</div>
+                    </div>
+                    <div class="image-counter">1/7</div>
+                    <div id="img-debug" style="display: none;">加载中...</div>
+                </div>
+
+                <!-- 商品价格信息卡片 -->
+                <div class="price-card">
+                    <div class="price-section">
+                        <div class="main-price">
+                            <span class="price-symbol">¥</span>
+                            <span class="price-amount">16099</span>
+                            <span class="price-condition">9.9新</span>
+                        </div>
+                        <div class="free-price-tag">
+                            <span class="free-package-text">无忧包价：0元</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 商品标题和店铺信息 -->
+                <div class="product-title-section">
+                    <div class="title-row">
+                        <div class="store-badge">在售商品</div>
+                        <div class="product-title">Louis Vuitton LV路易威登 NIH老花邮差包</div>
+                    </div>
+                    <div class="store-row">
+                        <img class="store-avatar" src="images/women_42.jpg" alt="店铺头像">
+                        <span class="store-name">奢光中·奢侈品回收</span>
+                        <span class="store-status">营业中 · 24h发货</span>
+                    </div>
+                </div>
+
+                <!-- 商品保障信息 -->
+                <div class="guarantee-section">
+                    <div class="guarantee-item">
+                        <span class="guarantee-icon">✓</span>
+                        <span class="guarantee-text">100%正品 验货满意再确认</span>
+                    </div>
+                    <div class="guarantee-item">
+                        <span class="guarantee-icon">✓</span>
+                        <span class="guarantee-text">优品保障 该店铺已缴纳保证金</span>
+                    </div>
+                </div>
+
+                <!-- 商品描述 -->
+                <div class="description-section">
+                    <div class="section-header">
+                        <span class="section-title">商品描述</span>
+                    </div>
+                    <div class="description-content">
+                        <p>2025年2月全新Louis Vuitton/路易威登NIH老花 手柄 斜挎包</p>
+                        <div class="spec-item">
+                            <span class="spec-label">尺寸：</span>
+                            <span class="spec-value">约23*17</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">配件：</span>
+                            <span class="spec-value">手提袋 盒子 防尘袋 小票</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 删除这里的重复AI悬浮按钮 -->
+                </div>
+            </div>
+
+            <!-- 底部购买栏 -->
+            <div class="purchase-bar">
+                <div class="action-buttons">
+                    <div class="action-btn">
+                        <span class="icon">🏠</span>
+                        <span class="label">首页</span>
+                    </div>
+                    <div class="action-btn">
+                        <span class="icon">❤️</span>
+                        <span class="label">收藏</span>
+                    </div>
+                    <div class="action-btn">
+                        <span class="icon">💬</span>
+                        <span class="label">客服</span>
+                    </div>
+                </div>
+                <div class="purchase-buttons">
+                    <button class="contact-btn">立即购买</button>
+                    <button class="buy-btn">无忧包下单</button>
+                </div>
+            </div>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+
+    <!-- 衣橱单品详情弹窗 -->
+    <div id="wardrobeItemModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalItemName">单品名称</h2>
+                <button class="close-modal-btn" onclick="closeItemDetailModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-image-container">
+                    <img id="modalItemImage" src="" alt="单品图片">
+                </div>
+                <div class="modal-details">
+                    <div class="detail-row">
+                        <span class="detail-label">类别:</span>
+                        <span id="modalItemCategory" class="detail-value">上衣</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">颜色:</span>
+                        <span id="modalItemColor" class="detail-value">白色</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">状态:</span>
+                        <span id="modalItemCondition" class="detail-value">良好</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">存放位置:</span>
+                        <span id="modalItemLocation" class="detail-value">卧室衣柜</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">季节:</span>
+                        <span id="modalItemSeason" class="detail-value">春秋</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">品牌:</span>
+                        <span id="modalItemBrand" class="detail-value">ZARA</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">尺码:</span>
+                        <span id="modalItemSize" class="detail-value">M</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">洗涤建议:</span>
+                        <span id="modalItemWash" class="detail-value">30°C机洗</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">购买价格:</span>
+                        <span id="modalItemPrice" class="detail-value">¥299</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">购买日期:</span>
+                        <span id="modalItemPurchaseDate" class="detail-value">2023-05-15</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">上传日期:</span>
+                        <span id="modalItemUploadDate" class="detail-value">2023-06-01</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">购买链接:</span>
+                        <a id="modalItemPurchaseLink" href="#" target="_blank" class="detail-link">查看链接</a>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-action-btn" onclick="alert('编辑功能开发中')">编辑信息</button>
+                <button class="modal-action-btn primary" onclick="alert('添加到搭配功能开发中')">添加到搭配</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/main.js"></script>
+    <script src="scripts/fix.js"></script>
+    <script>
+    function toggleSearch() {
+        const searchModal = document.getElementById('searchModal');
+        searchModal.classList.toggle('active');
+    }
+    
+    // 确保closeUploadOptionsModal函数在全局范围内可用
+    function closeUploadOptionsModal() {
+        const modal = document.getElementById('uploadOptionsModal');
+        if (modal) {
+            modal.classList.remove('active');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+    }
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('页面加载完成');
+        
+        // 输出所有容器信息用于调试
+        console.log('页面容器数量:', document.querySelectorAll('.iphone-container').length);
+        document.querySelectorAll('.iphone-container').forEach((container, index) => {
+            console.log(`容器 ${index}:`, container.id || '无ID', container.className);
+        });
+        
+        // 检查电商详情页容器
+        const detailContainer = document.getElementById('product-detail-container');
+        if (detailContainer) {
+            console.log('找到电商详情页容器');
+        } else {
+            console.error('未找到电商详情页容器!');
+        }
+        
+        // 隐藏浏览器安全提示，我们现在使用SVG
+        var browserTip = document.getElementById('browserTip');
+        if (browserTip) {
+            browserTip.innerHTML = `
+                <div style="padding: 10px;">
+                    <h4 style="margin-top: 0;">图片加载优化</h4>
+                    <p>已使用内嵌SVG矢量图替代图片文件，避免浏览器安全限制和文件路径问题</p>
+                    <div style="text-align: center; margin-top: 5px;">
+                        <button onclick="document.getElementById('browserTip').style.display='none'" style="padding: 3px 8px; background: #4CAF50; color: white; border: 1px solid #4CAF50; border-radius: 3px; cursor: pointer;">了解</button>
+                    </div>
+                </div>
+            `;
+            
+            // 5秒后自动隐藏提示
+            setTimeout(function() {
+                browserTip.style.opacity = '0';
+                setTimeout(function() {
+                    browserTip.style.display = 'none';
+                }, 500);
+            }, 5000);
+        }
+        
+        // 添加点击svg切换回原始图片的功能，如果有需要
+        var svg = document.querySelector('svg');
+        if (svg) {
+            svg.style.cursor = 'pointer';
+            svg.addEventListener('click', function() {
+                console.log('点击了SVG图片');
+                // 这里可以添加点击处理，例如放大查看等
+            });
+        }
+        
+        // 底部导航栏点击事件
+        const bottomNavBtns = document.querySelectorAll('.bottom-nav .nav-btn');
+        if (bottomNavBtns.length > 0) {
+            console.log('找到底部导航按钮数量:', bottomNavBtns.length);
+            bottomNavBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = this.id;
+                    console.log('点击底部导航按钮:', id);
+                    
+                    if (id === 'uploadBtn') {
+                        // 显示上传选项
+                        const uploadModal = document.getElementById('uploadOptionsModal');
+                        if (uploadModal) {
+                            uploadModal.style.display = 'flex';
+                            uploadModal.classList.add('active');
+                        }
+                    } else if (id === 'aiBtn') {
+                        // 返回首页
+                        showScreen('home');
+                    } else if (id === 'wardrobeBtn') {
+                        // 显示衣橱页面
+                        showScreen('wardrobe');
+                    } else if (id === 'socialBtn') {
+                        // 显示社交页面
+                        showScreen('social');
+                    }
+                });
+            });
+        } else {
+            console.warn('未找到底部导航按钮');
+        }
+        
+        console.log('准备显示电商详情页');
+        // 设置默认显示电商详情页
+        showScreen('productDetail');
+        console.log('调用showScreen完成');
+        
+        // 删除调试按钮，不再添加debugBar
+    });
+    
+    // 隐藏不需要的调试信息
+    document.getElementById('img-debug').style.display = 'none';
+    
+    // 显示特定屏幕
+    function showScreen(screenId) {
+        console.log('切换到页面:', screenId);
+        
+        // 特殊处理home，确保每次调用时强制更新URL hash
+        if (screenId === 'home') {
+            if (window.location.hash !== '#home') {
+                // 更新hash但防止触发hashchange事件的无限循环
+                history.replaceState(null, null, '#home');
+            }
+        }
+        
+        // 隐藏所有iphone-container
+        const allContainers = document.querySelectorAll('.iphone-container');
+        allContainers.forEach(container => {
+            container.style.display = 'none';
+        });
+        
+        // 如果要显示尺码档案页面
+        if (screenId === 'size-profile') {
+            console.log('显示尺码档案页面');
+            const sizeProfileContainer = document.getElementById('size-profile-container');
+            if (sizeProfileContainer) {
+                sizeProfileContainer.style.display = 'block';
+                console.log('成功显示尺码档案页面');
+            } else {
+                console.error('未找到尺码档案页面容器!');
+            }
+            return;
+        }
+        
+        // 如果要显示电商详情页
+        if (screenId === 'productDetail') {
+            console.log('显示电商详情页');
+            const detailContainer = document.getElementById('product-detail-container');
+            if (detailContainer) {
+                detailContainer.style.display = 'block';
+                console.log('成功显示电商详情页');
+            } else {
+                console.error('未找到电商详情页容器!');
+            }
+            return;
+        }
+        
+        // 处理个人中心页面
+        if (screenId === 'profile') {
+            console.log('显示个人中心页面');
+            const profileContainer = document.querySelector('.container#profile-screen').closest('.iphone-container');
+            if (profileContainer) {
+                profileContainer.style.display = 'block';
+                console.log('成功显示个人中心页面');
+                // 激活个人中心底部导航按钮
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                const profileBtn = document.querySelector('#profileBtn');
+                if (profileBtn) {
+                    profileBtn.classList.add('active');
+                }
+            } else {
+                console.error('找不到个人中心页面容器');
+            }
+            return;
+        }
+        
+        // 显示选定的屏幕
+        let targetContainer;
+        
+        if (screenId === 'social') {
+            targetContainer = document.getElementById('social-container');
+        } else if (screenId === 'wardrobe') {
+            const wardrobeContainers = document.querySelectorAll('.iphone-container');
+            wardrobeContainers.forEach(container => {
+                if (container.querySelector('#wardrobe-screen')) {
+                    targetContainer = container;
+                }
+            });
+        } else if (screenId === 'home') {
+            const homeContainers = document.querySelectorAll('.iphone-container');
+            homeContainers.forEach(container => {
+                if (container.querySelector('#home-screen')) {
+                    targetContainer = container;
+                }
+            });
+        }
+        
+        if (targetContainer) {
+            targetContainer.style.display = 'block';
+            console.log(`成功显示页面: ${screenId}`);
+        } else {
+            console.error(`找不到页面容器: ${screenId}`);
+        }
+    }
+    
+    // 页面加载完成后的初始化函数
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('页面加载完成，检查并显示相应页面');
+        
+        // 检查URL参数是否来自尺码档案页面
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('target') === 'profile') {
+            console.log('检测到从档案页面返回，显示个人中心页面');
+            showScreen('profile');
+            return;
+        }
+        
+        // 检查是否需要强制显示个人中心页面
+        if (window.SHOULD_SHOW_PROFILE) {
+            console.log('检测到全局标志，显示个人中心页面');
+            showScreen('profile');
+            return;
+        }
+        
+        // 首先检查sessionStorage，看是否需要显示特定页面
+        const showPage = sessionStorage.getItem('showPage');
+        if (showPage) {
+            console.log('从sessionStorage检测到需要显示页面:', showPage);
+            // 显示指定页面
+            showScreen(showPage);
+            // 移除标记，避免影响后续访问
+            sessionStorage.removeItem('showPage');
+            return;
+        }
+        
+        // 获取当前hash
+        const currentHash = window.location.hash;
+        console.log('当前URL hash:', currentHash);
+        
+        // 根据hash显示对应页面
+        if (currentHash === '#profile' || currentHash.startsWith('#profile?')) {
+            console.log('显示个人中心页面');
+            showScreen('profile');
+        } else if (currentHash === '#wardrobe') {
+            showScreen('wardrobe');
+        } else if (currentHash === '#social') {
+            showScreen('social');
+        } else {
+            // 无效hash或空hash，显示首页
+            console.log('显示首页');
+            showScreen('home');
+        }
+    });
+    
+    // 监听hash变化
+    window.addEventListener('hashchange', function() {
+        const newHash = window.location.hash;
+        console.log('URL hash变化:', newHash);
+        
+        if (newHash === '#profile' || newHash.startsWith('#profile?')) {
+            showScreen('profile');
+        } else if (newHash === '#home') {
+            showScreen('home');
+        } else if (newHash === '#wardrobe') {
+            showScreen('wardrobe');
+        } else if (newHash === '#social') {
+            showScreen('social');
+        } else if (newHash === '') {
+            // 如果hash为空，显示首页
+            showScreen('home');
+        }
+    });
+    
+    // 其余JavaScript保持不变
+    // ... existing code ...
+    
+    // 处理点赞和收藏按钮点击
+    function toggleLike(button) {
+        button.classList.toggle('active');
+        const heartIcon = button.querySelector('.heart-icon path');
+        if (button.classList.contains('active')) {
+            heartIcon.setAttribute('fill', 'currentColor');
+        } else {
+            heartIcon.setAttribute('fill', 'none');
+        }
+    }
+    
+    function toggleFavorite(button) {
+        button.classList.toggle('active');
+        const starIcon = button.querySelector('.star-icon path');
+        if (button.classList.contains('active')) {
+            starIcon.setAttribute('fill', 'currentColor');
+        } else {
+            starIcon.setAttribute('fill', 'none');
+        }
+    }
+    
+    // 处理推荐more按钮点击
+    function handleRecommendMoreClick() {
+        // 跳转到个性推荐合集页面
+        console.log('跳转到个性推荐合集页面');
+        alert('跳转到个性推荐合集页面');
+    }
+    
+    // 处理个性推荐缩略图点击
+    function handleRecommendationItemClick(imgSrc, collectCount) {
+        // 创建一个与穿搭详情类似的数据结构
+        const outfitData = {
+            imageSrc: imgSrc,
+            userAvatar: 'images/women_42.jpg',
+            userName: 'AI推荐',
+            userLevel: 'Lv.S 智能推荐',
+            likeCount: Math.floor(collectCount * 1.5).toString(),
+            favoriteCount: collectCount,
+            shareCount: Math.floor(collectCount * 0.6).toString(),
+            description: '这是AI根据您的风格偏好智能推荐的穿搭方案，匹配您的个人风格与当季流行趋势。',
+            isFollowed: false,
+            // 示例单品数据
+            items: [
+                {
+                    id: 1,
+                    name: '推荐上衣',
+                    brand: '时尚品牌',
+                    price: '¥359',
+                    desc: '根据您的喜好推荐的上衣单品',
+                    image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=150&h=150&fit=crop',
+                    link: 'https://example.com/recommended-top',
+                    x: 30,
+                    y: 30
+                },
+                {
+                    id: 2,
+                    name: '推荐裤装',
+                    brand: '潮流品牌',
+                    price: '¥429',
+                    desc: '与上衣完美搭配的裤装',
+                    image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=150&h=150&fit=crop',
+                    link: 'https://example.com/recommended-pants',
+                    x: 30,
+                    y: 60
+                },
+                {
+                    id: 3,
+                    name: '推荐配饰',
+                    brand: '轻奢品牌',
+                    price: '¥259',
+                    desc: '为整体造型加分的点睛配饰',
+                    image: 'https://images.unsplash.com/photo-1613152184920-bc1c4ab468f6?w=150&h=150&fit=crop',
+                    link: 'https://example.com/recommended-accessory',
+                    x: 30,
+                    y: 85
+                }
+            ]
+        };
+        
+        openOutfitDetailModal(outfitData);
+    }
+    
+    // 打开穿搭详情弹窗
+    function openOutfitDetailModal(outfitData) {
+        const modal = document.getElementById('outfitDetailModal');
+        
+        // 添加手机模拟边框类
+        modal.classList.add('phone-frame-simulation');
+        
+        // 隐藏底部导航
+        const bottomNav = document.querySelector('.bottom-nav');
+        if (bottomNav) {
+            bottomNav.style.display = 'none';
+        }
+        
+        // 清除之前的内容和背景
+        const detailImageContainer = document.getElementById('detailItemsList');
+        detailImageContainer.innerHTML = '';
+        detailImageContainer.style.backgroundImage = '';
+        detailImageContainer.style.backgroundSize = '';
+        detailImageContainer.style.backgroundPosition = '';
+        detailImageContainer.style.backgroundRepeat = '';
+        detailImageContainer.style.backgroundColor = 'white';  // 确保背景为白色
+        
+        // 设置详情页的数据
+        const detailImage = document.createElement('img');
+        detailImage.id = 'detailOutfitImage';
+        detailImage.src = outfitData.imageSrc;
+        detailImage.alt = '穿搭大图';
+        detailImageContainer.appendChild(detailImage);
+        
+        // 添加热点提示区域
+        const hotspotHintContainer = document.createElement('div');
+        hotspotHintContainer.className = 'hotspot-hint-container';
+        hotspotHintContainer.style.position = 'absolute';
+        hotspotHintContainer.style.top = '10px';
+        hotspotHintContainer.style.left = '0';
+        hotspotHintContainer.style.width = '100%';
+        hotspotHintContainer.style.display = 'flex';
+        hotspotHintContainer.style.justifyContent = 'center';
+        hotspotHintContainer.style.zIndex = '25';
+        detailImageContainer.appendChild(hotspotHintContainer);
+        
+        // 添加热点提示文字
+        const hotspotHint = document.createElement('div');
+        hotspotHint.className = 'hotspot-hint';
+        hotspotHint.textContent = '点击图片查看单品详情';
+        hotspotHint.style.background = 'rgba(0,0,0,0.5)';
+        hotspotHint.style.color = 'white';
+        hotspotHint.style.padding = '5px 10px';
+        hotspotHint.style.borderRadius = '20px';
+        hotspotHint.style.fontSize = '12px';
+        hotspotHintContainer.appendChild(hotspotHint);
+        
+        // 添加一个热点容器
+        const hotspotContainer = document.createElement('div');
+        hotspotContainer.className = 'hotspot-container';
+        hotspotContainer.style.position = 'absolute';
+        hotspotContainer.style.top = '0';
+        hotspotContainer.style.left = '0';
+        hotspotContainer.style.width = '100%';
+        hotspotContainer.style.height = '100%';
+        hotspotContainer.style.pointerEvents = 'none'; // 避免阻止图片点击
+        detailImageContainer.appendChild(hotspotContainer);
+        
+        document.getElementById('detailUserAvatar').src = outfitData.userAvatar;
+        document.getElementById('detailUserName').textContent = outfitData.userName;
+        document.getElementById('detailUserLevel').textContent = outfitData.userLevel;
+        document.getElementById('detailLikeCount').textContent = outfitData.likeCount || '0';
+        document.getElementById('detailFavoriteCount').textContent = outfitData.favoriteCount || '0';
+        document.getElementById('detailShareCount').textContent = outfitData.shareCount || '0';
+        document.getElementById('detailDescription').textContent = outfitData.description || '暂无描述';
+        
+        // 等待图片加载完成后添加热点
+        detailImage.onload = function() {
+            // 清除热点容器
+            hotspotContainer.innerHTML = '';
+            
+            // 添加热点
+            if (outfitData.items && outfitData.items.length > 0) {
+                outfitData.items.forEach(item => {
+                    const hotspotElem = document.createElement('div');
+                    hotspotElem.className = 'detail-item-hotspot';
+                    hotspotElem.style.left = `${item.x}%`;
+                    hotspotElem.style.top = `${item.y}%`;
+                    hotspotElem.style.pointerEvents = 'auto'; // 允许点击
+                    
+                    hotspotElem.dataset.itemId = item.id;
+                    hotspotElem.dataset.itemName = item.name;
+                    hotspotElem.dataset.itemBrand = item.brand;
+                    hotspotElem.dataset.itemPrice = item.price;
+                    hotspotElem.dataset.itemDesc = item.desc;
+                    hotspotElem.dataset.itemImage = item.image;
+                    hotspotElem.dataset.itemLink = item.link;
+                    
+                    const dotElem = document.createElement('div');
+                    dotElem.className = 'hotspot-dot';
+                    
+                    hotspotElem.appendChild(dotElem);
+                    hotspotContainer.appendChild(hotspotElem);
+                    
+                    // 添加点击事件
+                    hotspotElem.addEventListener('click', function() {
+                        openItemHotspotModal(this.dataset);
+                    });
+                });
+            }
+        };
+        
+        // 显示弹窗
+        modal.style.display = 'flex';
+        modal.style.justifyContent = 'center'; // 水平居中
+        modal.style.alignItems = 'center'; // 垂直居中
+        
+        // 关注按钮状态
+        const followBtn = document.getElementById('detailFollowBtn');
+        if (followBtn) {
+            if (outfitData.isFollowed) {
+                followBtn.textContent = '已关注';
+                followBtn.classList.add('followed');
+            } else {
+                followBtn.textContent = '关注';
+                followBtn.classList.remove('followed');
+            }
+            
+            // 关注按钮点击事件
+            followBtn.onclick = function() {
+                if (this.classList.contains('followed')) {
+                    this.textContent = '关注';
+                    this.classList.remove('followed');
+                } else {
+                    this.textContent = '已关注';
+                    this.classList.add('followed');
+                }
+            };
+        }
+        
+        // 点赞和收藏按钮状态
+        const likeBtn = document.getElementById('detailLikeBtn');
+        const favoriteBtn = document.getElementById('detailFavoriteBtn');
+        
+        if (likeBtn) {
+            if (outfitData.isLiked) {
+                likeBtn.classList.add('active');
+                const heartIcon = likeBtn.querySelector('.heart-icon path');
+                if (heartIcon) {
+                    heartIcon.setAttribute('fill', 'currentColor');
+                }
+            } else {
+                likeBtn.classList.remove('active');
+                const heartIcon = likeBtn.querySelector('.heart-icon path');
+                if (heartIcon) {
+                    heartIcon.setAttribute('fill', 'none');
+                }
+            }
+        }
+        
+        if (favoriteBtn) {
+            if (outfitData.isFavorited) {
+                favoriteBtn.classList.add('active');
+                const starIcon = favoriteBtn.querySelector('.star-icon path');
+                if (starIcon) {
+                    starIcon.setAttribute('fill', 'currentColor');
+                }
+            } else {
+                favoriteBtn.classList.remove('active');
+                const starIcon = favoriteBtn.querySelector('.star-icon path');
+                if (starIcon) {
+                    starIcon.setAttribute('fill', 'none');
+                }
+            }
+        }
+    }
+    
+    // 关闭穿搭详情弹窗
+    function closeOutfitDetailModal() {
+        const modal = document.getElementById('outfitDetailModal');
+        modal.style.display = 'none';
+        
+        // 移除手机模拟边框类
+        modal.classList.remove('phone-frame-simulation');
+        
+        // 确保底部导航再次显示
+        const bottomNav = document.querySelector('.bottom-nav');
+        if (bottomNav) {
+            bottomNav.style.display = 'flex';
+        }
+        
+        // 强制触发布局更新，解决可能的渲染问题
+        setTimeout(function() {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
+    }
+    
+    // 打开单品热点弹窗
+    function openItemHotspotModal(itemData) {
+        const modal = document.getElementById('itemHotspotModal');
+        const outfitDetailContent = document.querySelector('.outfit-detail-content');
+        
+        // 确保热点弹窗位于手机界面内
+        if (outfitDetailContent) {
+            modal.style.position = 'absolute';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.zIndex = '1500';
+            outfitDetailContent.appendChild(modal);
+            
+            // 调整热点内容的位置，避免被刘海和底部指示器遮挡
+            const hotspotContent = modal.querySelector('.hotspot-content');
+            if (hotspotContent) {
+                hotspotContent.style.margin = '60px auto 30px';
+                hotspotContent.style.maxHeight = 'calc(100% - 120px)';
+                hotspotContent.style.overflowY = 'auto';
+            }
+        }
+        
+        document.getElementById('hotspotItemImage').src = itemData.itemImage;
+        document.getElementById('hotspotItemName').textContent = itemData.itemName;
+        document.getElementById('hotspotItemBrand').textContent = itemData.itemBrand;
+        document.getElementById('hotspotItemPrice').textContent = itemData.itemPrice;
+        document.getElementById('hotspotItemDesc').textContent = itemData.itemDesc;
+        document.getElementById('hotspotItemLink').href = itemData.itemLink;
+        
+        modal.style.display = 'flex';
+    }
+    
+    // 关闭单品热点弹窗
+    function closeItemHotspotModal() {
+        const modal = document.getElementById('itemHotspotModal');
+        modal.style.display = 'none';
+        
+        // 将弹窗移回body，避免DOM结构混乱
+        const outfitDetailContent = document.querySelector('.outfit-detail-content');
+        if (outfitDetailContent && outfitDetailContent.contains(modal)) {
+            document.body.appendChild(modal);
+        }
+    }
+    
+    // 初始化页面交互
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化社交页面交互
+        
+        // 社交标签切换
+        const socialTabs = document.querySelectorAll('.social-tab');
+        if (socialTabs.length > 0) {
+            socialTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    switchSocialTab(this.dataset.tab);
+                });
+            });
+        }
+        
+        // 搜索关键词和按钮点击
+        const searchKeywords = document.querySelector('.search-keywords');
+        if (searchKeywords) {
+            searchKeywords.addEventListener('click', handleKeywordClick);
+        }
+        
+        const searchBtn = document.getElementById('socialSearchBtn');
+        if (searchBtn) {
+            searchBtn.addEventListener('click', handleSearchClick);
+        }
+        
+        // 推荐more按钮点击
+        const recommendMoreBtn = document.getElementById('recommendMoreBtn');
+        if (recommendMoreBtn) {
+            recommendMoreBtn.addEventListener('click', handleRecommendMoreClick);
+        }
+        
+        // 个性推荐缩略图点击事件
+        const recommendationItems = document.querySelectorAll('.recommendation-item');
+        if (recommendationItems.length > 0) {
+            recommendationItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    // 如果点击的是收藏按钮，不触发图片点击事件
+                    if (e.target.closest('.collect-btn')) {
+                        return;
+                    }
+                    
+                    const imgSrc = this.querySelector('img').src;
+                    const collectCount = this.querySelector('.collect-count').textContent;
+                    handleRecommendationItemClick(imgSrc, collectCount);
+                });
+            });
+        }
+        
+        // 监听收藏按钮点击
+        const collectBtns = document.querySelectorAll('.collect-btn');
+        if (collectBtns.length > 0) {
+            collectBtns.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // 阻止冒泡
+                    const starIcon = this.querySelector('.star-icon path');
+                    if (starIcon.getAttribute('fill') === 'none') {
+                        starIcon.setAttribute('fill', 'currentColor');
+                    } else {
+                        starIcon.setAttribute('fill', 'none');
+                    }
+                });
+            });
+        }
+        
+        // 详情页的点赞和收藏按钮
+        const detailLikeBtn = document.getElementById('detailLikeBtn');
+        if (detailLikeBtn) {
+            detailLikeBtn.addEventListener('click', function() {
+                toggleLike(this);
+            });
+        }
+        
+        const detailFavoriteBtn = document.getElementById('detailFavoriteBtn');
+        if (detailFavoriteBtn) {
+            detailFavoriteBtn.addEventListener('click', function() {
+                toggleFavorite(this);
+            });
+        }
+        
+        // 穿搭卡片点击事件
+        const outfitCards = document.querySelectorAll('.outfit-card');
+        if (outfitCards.length > 0) {
+            outfitCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    // 获取卡片数据
+                    const image = this.querySelector('.outfit-image img');
+                    const userAvatar = this.querySelector('.user-avatar');
+                    const userName = this.querySelector('.user-name');
+                    const userLevel = this.querySelector('.user-level');
+                    const likeCount = this.querySelector('.like-count');
+                    const favoriteCount = this.querySelector('.favorite-count');
+                    const shareCount = this.querySelector('.share-count');
+                    
+                    const outfitData = {
+                        imageSrc: image ? image.src : '',
+                        userAvatar: userAvatar ? userAvatar.src : 'images/women_42.jpg',
+                        userName: userName ? userName.textContent : '匿名用户',
+                        userLevel: userLevel ? userLevel.textContent : 'Lv.1 新手',
+                        likeCount: likeCount ? likeCount.textContent.replace('❤️ ', '') : '0',
+                        favoriteCount: favoriteCount ? favoriteCount.textContent.replace('💖 ', '') : '0',
+                        shareCount: shareCount ? shareCount.textContent.replace('🔗 ', '') : '0',
+                        description: '这是一套精心搭配的穿搭方案，适合多种场合，舒适又时尚。',
+                        isFollowed: false,
+                        // 示例单品数据
+                        items: [
+                            {
+                                id: 1,
+                                name: '时尚衬衫',
+                                brand: '某知名品牌',
+                                price: '¥299',
+                                desc: '白色纯棉衬衫，适合商务场合',
+                                image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=150&h=150&fit=crop',
+                                link: 'https://example.com/shirt',
+                                x: 30,
+                                y: 30
+                            },
+                            {
+                                id: 2,
+                                name: '休闲长裤',
+                                brand: '某时尚品牌',
+                                price: '¥399',
+                                desc: '黑色休闲长裤，舒适面料',
+                                image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=150&h=150&fit=crop',
+                                link: 'https://example.com/pants',
+                                x: 30,
+                                y: 60
+                            },
+                            {
+                                id: 3,
+                                name: '商务皮鞋',
+                                brand: '某奢侈品牌',
+                                price: '¥799',
+                                desc: '黑色商务皮鞋，简约大方',
+                                image: 'https://images.unsplash.com/photo-1605812860427-4024433a70fd?w=150&h=150&fit=crop',
+                                link: 'https://example.com/shoes',
+                                x: 30,
+                                y: 85
+                            }
+                        ]
+                    };
+                    
+                    openOutfitDetailModal(outfitData);
+                });
+            });
+        }
+        
+        // 为关闭按钮添加事件监听
+        const closeBtn = document.querySelector('#outfitDetailModal .close-btn');
+        const backBtn = document.querySelector('#outfitDetailModal .back-btn');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeOutfitDetailModal();
+            }, true);
+        }
+        
+        if (backBtn) {
+            backBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeOutfitDetailModal();
+            }, true);
+        }
+        
+        // 统一处理所有卡片上的点赞和收藏图标样式
+        const allHeartIcons = document.querySelectorAll('.outfit-card .heart-icon path');
+        const allStarIcons = document.querySelectorAll('.outfit-card .star-icon path');
+        
+        if (allHeartIcons.length > 0) {
+            allHeartIcons.forEach(icon => {
+                icon.setAttribute('stroke', 'white');
+                icon.setAttribute('stroke-width', '2');
+                icon.setAttribute('fill', 'none');
+            });
+        }
+        
+        if (allStarIcons.length > 0) {
+            allStarIcons.forEach(icon => {
+                icon.setAttribute('stroke', 'white');
+                icon.setAttribute('stroke-width', '2');
+                icon.setAttribute('fill', 'none');
+            });
+        }
+    });
+    
+    // 切换社交页面的标签
+    function switchSocialTab(tabId) {
+        const tabs = document.querySelectorAll('.social-tab');
+        const contents = document.querySelectorAll('.social-tab-content');
+        
+        tabs.forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        contents.forEach(content => {
+            content.classList.remove('active');
+        });
+        
+        const selectedTab = document.querySelector(`.social-tab[data-tab="${tabId}"]`);
+        const selectedContent = document.getElementById(`${tabId}-content`);
+        
+        if (selectedTab && selectedContent) {
+            selectedTab.classList.add('active');
+            selectedContent.classList.add('active');
+        }
+    }
+    
+    // 处理搜索关键词点击
+    function handleKeywordClick(event) {
+        if (event.target.classList.contains('keyword')) {
+            const keyword = event.target.dataset.keyword;
+            const searchInput = document.getElementById('socialSearchInput');
+            if (searchInput && keyword) {
+                searchInput.value = keyword;
+            }
+        }
+    }
+    
+    // 处理搜索按钮点击
+    function handleSearchClick() {
+        const searchInput = document.getElementById('socialSearchInput');
+        if (searchInput && searchInput.value.trim()) {
+            // 这里可以添加实际的搜索逻辑
+            console.log('搜索内容:', searchInput.value.trim());
+            alert('正在搜索: ' + searchInput.value.trim());
+        }
+    }
+
+    // 辅助函数，用于生成随机样式数据
+    function getCategoryName(category) {
+        const categories = {
+            'tops': '上衣',
+            'bottoms': '裤装',
+            'dresses': '连衣裙',
+            'outerwear': '外套',
+            'shoes': '鞋履',
+            'bags': '包袋',
+            'accessories': '配饰'
+        };
+        return categories[category] || '其他';
+    }
+
+    function getRandomColor() {
+        const colors = ['白色', '黑色', '灰色', '蓝色', '红色', '粉色', '绿色', '黄色', '紫色', '棕色'];
+        return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    function getRandomCondition() {
+        const conditions = ['全新', '几乎全新', '良好', '正常使用痕迹', '轻微磨损'];
+        return conditions[Math.floor(Math.random() * conditions.length)];
+    }
+
+    function getRandomLocation() {
+        const locations = ['卧室衣柜', '储物间', '玄关衣帽间', '衣橱第一层', '衣橱第二层', '衣橱第三层'];
+        return locations[Math.floor(Math.random() * locations.length)];
+    }
+
+    function getRandomSeason() {
+        const seasons = ['春季', '夏季', '秋季', '冬季', '春秋季', '四季皆宜'];
+        return seasons[Math.floor(Math.random() * seasons.length)];
+    }
+
+    function getRandomBrand() {
+        const brands = ['ZARA', 'H&M', 'UNIQLO', 'Muji', 'COS', '优衣库', '无印良品', 'GAP', 'NIKE', 'ADIDAS'];
+        return brands[Math.floor(Math.random() * brands.length)];
+    }
+
+    function getRandomSize() {
+        const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '35', '36', '37', '38', '39', '40', '41', '42'];
+        return sizes[Math.floor(Math.random() * sizes.length)];
+    }
+
+    function getRandomDate(daysAgo) {
+        const today = new Date();
+        const pastDate = new Date(today.getTime() - Math.floor(Math.random() * daysAgo) * 24 * 60 * 60 * 1000);
+        return pastDate.toISOString().split('T')[0];
+    }
+
+    /**
+     * 显示单品详情弹窗
+     * @param {HTMLElement} item - 单品元素
+     */
+    function showItemDetailModal(item) {
+        // 获取弹窗元素
+        const modal = document.getElementById('wardrobeItemModal');
+        
+        // 获取手机容器元素,确保弹窗在手机容器内
+        const phoneContainer = item.closest('.iphone-container');
+        if (phoneContainer && !phoneContainer.contains(modal)) {
+            // 将弹窗移到当前手机容器内
+            phoneContainer.appendChild(modal);
+            
+            // 清除可能影响定位的内联样式
+            modal.style.position = 'absolute';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.right = '0';
+            modal.style.bottom = '0';
+            modal.style.zIndex = '1000';
+            
+            // 调整内容区域,避开刘海和底部指示条
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent) {
+                modalContent.style.margin = '60px auto 40px'; // 调整上下边距
+            }
+        }
+        
+        // 获取单品信息
+        const itemImg = item.querySelector('img');
+        const itemName = itemImg ? itemImg.getAttribute('alt') : '未命名单品'; // 使用alt属性作为名称
+        const itemImgSrc = itemImg ? itemImg.src : '';
+        const category = item.dataset.category;
+        
+        // 示例数据，实际应用中应该从数据库获取
+        const itemDetails = {
+            name: itemName,
+            category: getCategoryName(category),
+            color: getRandomColor(),
+            condition: getRandomCondition(),
+            location: getRandomLocation(),
+            season: getRandomSeason(),
+            brand: getRandomBrand(),
+            size: getRandomSize(),
+            wash: '手洗或30°C机洗',
+            price: '¥' + (Math.floor(Math.random() * 1000) + 100),
+            purchaseDate: getRandomDate(365 * 2), // 2年内的随机日期
+            uploadDate: getRandomDate(30), // 30天内的随机日期
+            purchaseLink: 'https://example.com/item/' + Math.floor(Math.random() * 1000000)
+        };
+        
+        // 设置弹窗内容
+        document.getElementById('modalItemImage').src = itemImgSrc;
+        document.getElementById('modalItemName').textContent = itemDetails.name;
+        document.getElementById('modalItemCategory').textContent = itemDetails.category;
+        document.getElementById('modalItemColor').textContent = itemDetails.color;
+        document.getElementById('modalItemCondition').textContent = itemDetails.condition;
+        document.getElementById('modalItemLocation').textContent = itemDetails.location;
+        document.getElementById('modalItemSeason').textContent = itemDetails.season;
+        document.getElementById('modalItemBrand').textContent = itemDetails.brand;
+        document.getElementById('modalItemSize').textContent = itemDetails.size;
+        document.getElementById('modalItemWash').textContent = itemDetails.wash;
+        document.getElementById('modalItemPrice').textContent = itemDetails.price;
+        document.getElementById('modalItemPurchaseDate').textContent = itemDetails.purchaseDate;
+        document.getElementById('modalItemUploadDate').textContent = itemDetails.uploadDate;
+        document.getElementById('modalItemPurchaseLink').href = itemDetails.purchaseLink;
+        
+        // 显示弹窗
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('active');
+        }, 10);
+    }
+
+    /**
+     * 关闭单品详情弹窗
+     */
+    function closeItemDetailModal() {
+        const modal = document.getElementById('wardrobeItemModal');
+        modal.classList.remove('active');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+
+    // 初始化衣橱管理单品点击事件
+    document.addEventListener('DOMContentLoaded', function() {
+        // ... existing code ...
+        
+        // 衣橱管理单品点击事件
+        const wardrobeItems = document.querySelectorAll('.wardrobe-item');
+        if (wardrobeItems.length > 0) {
+            // 先创建弹窗元素
+            createWardrobeItemModal();
+            
+            wardrobeItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    showItemDetailModal(this);
+                });
+            });
+        }
+    });
+
+    // 创建单品详情弹窗
+    function createWardrobeItemModal() {
+        // 检查是否已存在弹窗
+        if (document.getElementById('wardrobeItemModal')) {
+            return;
+        }
+        
+        const modal = document.createElement('div');
+        modal.id = 'wardrobeItemModal';
+        modal.className = 'modal-overlay';
+        modal.style.position = 'absolute'; // 确保使用绝对定位
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.right = '0';
+        modal.style.bottom = '0';
+        modal.style.zIndex = '1000';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalItemName">单品名称</h2>
+                    <button class="close-modal-btn" onclick="closeItemDetailModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-image-container">
+                        <img id="modalItemImage" src="" alt="单品图片">
+                    </div>
+                    <div class="modal-details">
+                        <div class="detail-row">
+                            <span class="detail-label">类别:</span>
+                            <span id="modalItemCategory" class="detail-value">上衣</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">颜色:</span>
+                            <span id="modalItemColor" class="detail-value">白色</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">状态:</span>
+                            <span id="modalItemCondition" class="detail-value">良好</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">存放位置:</span>
+                            <span id="modalItemLocation" class="detail-value">卧室衣柜</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">季节:</span>
+                            <span id="modalItemSeason" class="detail-value">春秋</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">品牌:</span>
+                            <span id="modalItemBrand" class="detail-value">ZARA</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">尺码:</span>
+                            <span id="modalItemSize" class="detail-value">M</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">洗涤建议:</span>
+                            <span id="modalItemWash" class="detail-value">30°C机洗</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">购买价格:</span>
+                            <span id="modalItemPrice" class="detail-value">¥299</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">购买日期:</span>
+                            <span id="modalItemPurchaseDate" class="detail-value">2023-05-15</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">上传日期:</span>
+                            <span id="modalItemUploadDate" class="detail-value">2023-06-01</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">购买链接:</span>
+                            <a id="modalItemPurchaseLink" href="#" target="_blank" class="detail-link">查看链接</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-action-btn" onclick="alert('编辑功能开发中')">编辑信息</button>
+                    <button class="modal-action-btn primary" onclick="alert('添加到搭配功能开发中')">添加到搭配</button>
+                </div>
+            </div>
+        `;
+        
+        // 弹窗将在showItemDetailModal函数中添加到合适的容器中
+        document.body.appendChild(modal);
+    }
+    </script>
+    <script>
+        // 监听来自其他页面的消息
+        window.addEventListener('message', function(event) {
+            console.log('收到postMessage:', event.data);
+            
+            // 处理从尺码档案页面发来的消息
+            if (event.data && event.data.action === 'showProfile') {
+                console.log('收到显示个人中心页面的请求');
+                showScreen('profile');
+            }
+            
+            // 处理导航请求
+            if (event.data && event.data.action === 'navigateTo') {
+                console.log('收到导航请求:', event.data.url);
+                if (event.data.url.includes('#profile') || event.data.url.includes('?target=profile')) {
+                    // 如果是导航到个人中心页面
+                    showScreen('profile');
+                } else {
+                    // 其他导航目标
+                    if (event.data.url.includes('#')) {
+                        const hash = event.data.url.split('#')[1];
+                        showScreen(hash);
+                    }
+                }
+            }
+            
+            // 处理隐藏当前屏幕的请求
+            if (event.data && event.data.action === 'hideCurrentScreen') {
+                console.log('收到隐藏当前屏幕请求, 显示:', event.data.screenToShow);
+                if (event.data.screenToShow) {
+                    showScreen(event.data.screenToShow);
+                }
+            }
+        });
+        
+        // 最终确保从档案页面返回时显示个人中心页面
+        // 在页面完全加载后执行，覆盖所有其他初始化
+        window.addEventListener('load', function() {
+            console.log('页面完全加载完成，最终检查');
+            
+            // 检查是否从档案页面返回
+            if (localStorage.getItem('forceShowProfile') === 'true' || 
+                sessionStorage.getItem('showPage') === 'profile' ||
+                window.SHOULD_SHOW_PROFILE === true ||
+                window.location.hash === '#profile') {
+                
+                console.log('最终确认：需要显示个人中心页面');
+                
+                // 清除所有标记
+                localStorage.removeItem('forceShowProfile');
+                sessionStorage.removeItem('showPage');
+                
+                // 强制显示个人中心页面，覆盖所有其他显示逻辑
+                showScreen('profile');
+            }
+            
+            // 初始化尺码档案返回按钮
+            const sizeProfileBackButton = document.getElementById('sizeProfileBackButton');
+            if (sizeProfileBackButton) {
+                sizeProfileBackButton.addEventListener('click', function() {
+                    console.log('尺码档案返回按钮被点击');
+                    // 直接切换到个人中心页面，不进行页面跳转
+                    showScreen('profile');
+                });
+            }
+            
+            // 检查尺码档案背景图是否存在
+            const danganBg = document.querySelector('.dangan-background');
+            if (danganBg) {
+                danganBg.onerror = function() {
+                    console.error('档案背景图片不存在，使用纯色背景代替');
+                    this.style.display = 'none';
+                    this.parentElement.style.backgroundColor = '#f8f8f8';
+                };
+            }
+        });
+</script>
+
+    <!-- 尺码档案页面容器 -->
+    <div class="iphone-container" id="size-profile-container" style="display: none;">
+        <div class="iphone-notch"></div>
+        <div class="container size-profile-page">
+            <!-- 背景图片 -->
+            <img src="images/dangan.jpg" alt="档案背景" class="dangan-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; object-fit: cover;">
+            
+            <!-- 返回按钮 -->
+            <button class="back-button" id="sizeProfileBackButton" style="position: absolute; top: 20px; left: 20px; z-index: 10; background-color: rgba(255, 255, 255, 0.7); border: none; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);">←</button>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+</body>
+</html> 

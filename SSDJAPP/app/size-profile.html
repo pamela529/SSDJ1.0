@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>尺码档案</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        .dangan-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            object-fit: cover;
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background-color: rgba(255, 255, 255, 0.7);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+    <!-- 小程序环境模拟脚本 -->
+    <script>
+        // 模拟wx对象
+        if (typeof wx === 'undefined') {
+            window.wx = {
+                // 模拟导航到个人中心页面
+                navigateTo: function(options) {
+                    console.log('模拟wx.navigateTo', options);
+                    window.location.href = options.url || 'index.html';
+                },
+                // 模拟返回上一页
+                navigateBack: function() {
+                    console.log('模拟wx.navigateBack');
+                    // 设置标记
+                    localStorage.setItem('forceShowProfile', 'true');
+                    sessionStorage.setItem('showPage', 'profile');
+                    // 直接跳转到个人中心页面
+                    window.location.href = 'index.html#profile';
+                }
+            };
+        }
+        
+        // 判断当前页面是否在iframe中
+        function isInIframe() {
+            try {
+                return window !== window.top;
+            } catch (e) {
+                return true;
+            }
+        }
+        
+        // 处理页面导航的函数
+        function handlePageNavigation(url) {
+            if (isInIframe()) {
+                // 如果在iframe中，通知父窗口进行导航
+                window.parent.postMessage({
+                    action: 'navigateTo',
+                    url: url
+                }, '*');
+            } else {
+                // 直接进行导航
+                window.location.href = url;
+            }
+        }
+        
+        // 处理返回到个人中心的函数
+        function handleReturnToProfile() {
+            // 设置全局变量表示需要显示个人中心页面
+            localStorage.setItem('forceShowProfile', 'true');
+            sessionStorage.setItem('showPage', 'profile');
+            
+            // 检查是否在iframe中
+            if (isInIframe()) {
+                try {
+                    // 尝试直接调用父窗口的showScreen函数
+                    if (window.parent && typeof window.parent.showScreen === 'function') {
+                        window.parent.showScreen('profile');
+                        // 隐藏当前iframe或通知父窗口隐藏
+                        window.parent.postMessage({
+                            action: 'hideCurrentScreen',
+                            screenToShow: 'profile'
+                        }, '*');
+                        return true;
+                    }
+                    
+                    // 尝试通过postMessage通知父窗口
+                    window.parent.postMessage({
+                        action: 'showProfile'
+                    }, '*');
+                    return true;
+                } catch (e) {
+                    console.error('无法与父窗口通信', e);
+                }
+            }
+            
+            // 如果不在iframe中或无法与父窗口通信，则使用传统方式返回
+            return false;
+        }
+    </script>
+</head>
+<body>
+    <div class="iphone-container">
+        <div class="iphone-notch"></div>
+        <div class="container size-profile-page">
+            <!-- 背景图片 -->
+            <img src="images/dangan.jpg" alt="档案背景" class="dangan-background">
+            
+            <!-- 返回按钮 -->
+            <button class="back-button" id="backButton">←</button>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 获取来源页面信息，仅用于日志记录
+            const urlParams = new URLSearchParams(window.location.search);
+            const fromPage = urlParams.get('from') || 'index';
+            console.log('页面来源:', fromPage);
+            
+            // 返回按钮功能 - 直接返回个人中心
+            document.getElementById('backButton').addEventListener('click', function() {
+                console.log('档案页面返回按钮被点击');
+                
+                // 设置标记
+                localStorage.setItem('forceShowProfile', 'true');
+                sessionStorage.setItem('showPage', 'profile');
+                
+                // 直接跳转回主页并显示个人中心
+                window.location.href = 'index.html#profile';
+            });
+            
+            // 检查dangan.jpg图片是否存在的函数
+            function checkAndCreateImage() {
+                const img = document.querySelector('.dangan-background');
+                img.onerror = function() {
+                    console.error('档案背景图片不存在，使用纯色背景代替');
+                    // 图片不存在时使用纯色背景
+                    img.style.display = 'none';
+                    img.parentElement.style.backgroundColor = '#f8f8f8';
+                };
+            }
+            
+            // 调用检查图片函数
+            checkAndCreateImage();
+        });
+    </script>
+</body>
+</html> 

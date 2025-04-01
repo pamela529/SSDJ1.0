@@ -1,0 +1,140 @@
+<!-- index.wxml -->
+<view class="container">
+  <view class="header">
+    <view class="title-weather">
+      <view class="login-button" bindtap="onLoginOrProfile">
+        <block wx:if="{{!hasLogin}}">
+          <text class="login-text">登录</text>
+        </block>
+        <block wx:else>
+          <image class="avatar" src="{{userInfo.avatarUrl || '/images/women_42.jpg'}}" mode="aspectFill"></image>
+        </block>
+      </view>
+      <text class="title">今日推荐</text>
+      <view class="weather-info">
+        <text>{{weather.city}}</text>
+        <text>🌤</text>
+        <text>{{weather.temperature}}</text>
+      </view>
+    </view>
+    
+    <view class="identity-selector-container">
+      <picker bindchange="onIdentityChange" value="{{selectedIdentity}}" range="{{identities}}">
+        <view class="identity-selector">
+          <text>{{identities[selectedIdentity]}}</text>
+        </view>
+      </picker>
+      <view class="family-option">
+        <checkbox bindchange="onFamilyStyleChange" checked="{{isFamilyStyle}}" />
+        <text class="family-text">家庭</text>
+        <view class="help-icon" bindtap="toggleFamilyTip">?
+          <view class="help-tooltip" wx:if="{{showFamilyTip}}">
+            勾选后，不同身份的推荐搭配将保持统一风格，为您的全家人提供协调的穿搭方案。
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="main-content">
+    <view class="scene-selector">
+      <view wx:for="{{scenes}}" wx:key="id" 
+            class="{{currentScene === item.id ? 'scene-btn active' : 'scene-btn'}}" 
+            bindtap="onSceneChange" data-scene="{{item.id}}">
+        {{item.name}}
+      </view>
+      
+      <view wx:for="{{customScenes}}" wx:key="id"
+            class="{{currentScene === item.id ? 'scene-btn active' : 'scene-btn'}}"
+            bindtap="onCustomSceneClick" data-id="{{item.id}}">
+        {{item.name}}
+        <view class="delete-icon" catchtap="showDeleteConfirm" data-id="{{item.id}}">×</view>
+      </view>
+      
+      <view class="custom-scene-area">
+        <view class="scene-add-btn" bindtap="showAddSceneModal">+</view>
+        <view class="help-icon scene-help" bindtap="toggleSceneHelpTooltip">?
+          <view class="scene-help-tooltip" wx:if="{{showSceneHelpTooltip}}">
+            点击加号可添加自定义场景，个性化您的穿搭体验。
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="model-display">
+      <image class="model-image" src="{{currentOutfit.image || '/images/women_44.jpg'}}" mode="aspectFill"></image>
+      <view class="item-hotspots">
+        <view wx:for="{{currentOutfit.items}}" wx:key="id" 
+              class="item-hotspot" 
+              bindtap="onHotspotClick" 
+              data-item-id="{{item.id}}"
+              style="top: {{item.position.top}}; left: {{item.position.left}};">
+          <view class="hotspot-dot"></view>
+        </view>
+      </view>
+      <view class="favorite-btn" bindtap="toggleFavorite">
+        <icon type="{{currentOutfit.isFavorite ? 'success' : 'circle'}}" size="24" color="{{currentOutfit.isFavorite ? '#FF2D55' : '#FFFFFF'}}"></icon>
+      </view>
+    </view>
+  </view>
+
+  <view class="bottom-nav">
+    <view class="{{activeTab === 0 ? 'nav-btn active' : 'nav-btn'}}" bindtap="switchTab" data-index="0">
+      <icon type="success" size="24"></icon>
+      <text>首页</text>
+    </view>
+    <view class="{{activeTab === 1 ? 'nav-btn active' : 'nav-btn'}}" bindtap="switchTab" data-index="1">
+      <icon type="success" size="24"></icon>
+      <text>衣橱</text>
+    </view>
+    <view class="{{activeTab === 2 ? 'nav-btn active' : 'nav-btn'}}" bindtap="switchTab" data-index="2">
+      <text class="nav-icon">AI</text>
+      <text>智能搭配</text>
+    </view>
+    <view class="{{activeTab === 3 ? 'nav-btn active' : 'nav-btn'}}" bindtap="switchTab" data-index="3">
+      <icon type="success" size="24"></icon>
+      <text>社区</text>
+    </view>
+    <view class="{{activeTab === 4 ? 'nav-btn active' : 'nav-btn'}}" bindtap="switchTab" data-index="4">
+      <icon type="success" size="24"></icon>
+      <text>我的</text>
+    </view>
+  </view>
+
+  <!-- 添加场景模态框 -->
+  <view class="modal" wx:if="{{showAddSceneModal}}">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">添加自定义场景</text>
+      </view>
+      <view class="modal-body">
+        <input 
+          class="input" 
+          placeholder="输入场景名称" 
+          bindinput="inputSceneName" 
+          value="{{newSceneName}}"
+        />
+      </view>
+      <view class="modal-footer">
+        <button class="btn-cancel" bindtap="hideAddSceneModal">取消</button>
+        <button class="btn-confirm" bindtap="saveCustomScene">确定</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 删除确认模态框 -->
+  <view class="modal" wx:if="{{showDeleteModal}}">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">删除场景</text>
+      </view>
+      <view class="modal-body">
+        <text>确定要删除此场景吗？</text>
+      </view>
+      <view class="modal-footer">
+        <button class="btn-cancel" bindtap="hideDeleteModal">取消</button>
+        <button class="btn-delete" bindtap="deleteCustomScene">删除</button>
+      </view>
+    </view>
+  </view>
+</view> 

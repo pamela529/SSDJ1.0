@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能衣橱</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <!-- 引入SF Symbols的CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sf-symbols@1.0.0/css/sf-symbols.css">
+</head>
+<body>
+    <!-- 原型导航 -->
+    <nav class="prototype-nav">
+        <h2>界面原型</h2>
+        <ul>
+            <li><button onclick="showScreen('home')">首页</button></li>
+            <li><button onclick="showScreen('wardrobe')">衣橱管理</button></li>
+            <li><button onclick="showScreen('upload')">上传页面</button></li>
+            <li><button onclick="showScreen('profile')">个人中心</button></li>
+        </ul>
+    </nav>
+
+    <!-- 首页原型 -->
+    <div class="iphone-container">
+        <div class="iphone-notch"></div>
+        <div class="container" id="home-screen">
+            <!-- 原有的首页内容 -->
+            <div class="header">
+                <div class="title-weather">
+                    <div class="login-button" id="loginButton">
+                        <span class="login-text">登录</span>
+                        <span class="login-icon-default">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="#007AFF"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <h1>今日推荐</h1>
+                    <div class="weather-info">
+                        <span>北京</span>
+                        <span>🌤</span>
+                        <span>23°</span>
+                    </div>
+                </div>
+                <div class="identity-selector-container">
+                    <div class="identity-selector">
+                        <select>
+                            <option selected>本人</option>
+                            <option>老公</option>
+                            <option>孩子</option>
+                            <option>宠物</option>
+                        </select>
+                    </div>
+                    <label class="family-option">
+                        <input type="checkbox" id="familyStyleCheck">
+                        <span class="family-text">家庭</span>
+                        <span class="help-icon">?
+                            <span class="help-tooltip">勾选后，不同身份的推荐搭配将保持统一风格，为您的全家人提供协调的穿搭方案。不勾选则会根据每个成员的个性提供多样化的推荐。</span>
+                        </span>
+                    </label>
+                </div>
+                <div class="items-header">
+                    <span class="items-title">单品</span>
+                    <button class="filter-btn" onclick="showFilterModal()">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <main class="main-content">
+                <div class="scene-selector">
+                    <button class="scene-btn active">适勤</button>
+                    <button class="scene-btn">商务</button>
+                    <button class="scene-btn">休闲</button>
+                    <button class="scene-btn">聚会</button>
+                </div>
+
+                <div class="model-display">
+                    <img class="model-image" src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&h=1200&fit=crop" alt="模特展示">
+                </div>
+
+                <div class="items-display">
+                    <div class="items-content">
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品1">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品2">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品3">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=120&h=120&fit=crop" alt="单品4">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品5">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品6">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=120&h=120&fit=crop" alt="单品7">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品8">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品9">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品10">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品11">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=120&h=120&fit=crop" alt="单品12">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=120&h=120&fit=crop" alt="单品13">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=120&h=120&fit=crop" alt="单品14">
+                        </div>
+                        <div class="item-thumbnail">
+                            <img src="https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=120&h=120&fit=crop" alt="单品15">
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn" id="uploadBtn">
+                    <span class="nav-icon">+</span>
+                </button>
+                <button class="nav-btn" id="aiBtn">
+                    <span class="nav-icon">AI</span>
+                </button>
+                <button class="nav-btn" id="wardrobeBtn">
+                    <span class="nav-icon wardrobe-icon">衣橱</span>
+                </button>
+            </nav>
+        </div>
+        
+        <div class="iphone-home-indicator"></div>
+        
+        <!-- 筛选弹窗（移到iPhone容器内） -->
+        <div class="filter-modal" id="filterModal" style="display: none;">
+            <div class="filter-content">
+                <div class="filter-header">
+                    <h3>筛选</h3>
+                    <button class="close-btn" onclick="closeFilterModal()">×</button>
+                </div>
+                <div class="filter-options">
+                    <div class="filter-group">
+                        <h4>归属人</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="owner-select">
+                                <option value="全部" selected>全部</option>
+                                <option value="本人">本人</option>
+                                <option value="配偶">配偶</option>
+                                <option value="孩子">孩子</option>
+                                <option value="宠物">宠物</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>类别</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="category-select">
+                                <option value="" selected>请选择</option>
+                                <option value="上衣">上衣</option>
+                                <option value="裤子">裤子</option>
+                                <option value="裙子">裙子</option>
+                                <option value="外套">外套</option>
+                                <option value="礼服">礼服</option>
+                                <option value="鞋履">鞋履</option>
+                                <option value="配饰">配饰</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>颜色</h4>
+                        <div class="filter-select-container" id="color-select-container">
+                            <select class="filter-select" id="color-select">
+                                <option value="" selected>请选择</option>
+                                <option value="#000000" data-color="#000000">黑色</option>
+                                <option value="#FFFFFF" data-color="#FFFFFF">白色</option>
+                                <option value="#FF3B30" data-color="#FF3B30">红色</option>
+                                <option value="#FF9500" data-color="#FF9500">橙色</option>
+                                <option value="#FFCC00" data-color="#FFCC00">黄色</option>
+                                <option value="#34C759" data-color="#34C759">绿色</option>
+                                <option value="#5AC8FA" data-color="#5AC8FA">浅蓝</option>
+                                <option value="#007AFF" data-color="#007AFF">蓝色</option>
+                                <option value="#5856D6" data-color="#5856D6">紫色</option>
+                                <option value="#AF52DE" data-color="#AF52DE">紫红</option>
+                                <option value="#FF2D55" data-color="#FF2D55">粉色</option>
+                                <option value="#A2845E" data-color="#A2845E">棕色</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>季节</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="season-select">
+                                <option value="" selected>请选择</option>
+                                <option value="春季">春季</option>
+                                <option value="夏季">夏季</option>
+                                <option value="秋季">秋季</option>
+                                <option value="冬季">冬季</option>
+                                <option value="四季">四季</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <h4>场合</h4>
+                        <div class="filter-select-container">
+                            <select class="filter-select" id="occasion-select">
+                                <option value="" selected>请选择</option>
+                                <option value="正式">正式</option>
+                                <option value="休闲">休闲</option>
+                                <option value="职场">职场</option>
+                                <option value="运动">运动</option>
+                                <option value="家居">家居</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-actions">
+                    <button class="reset-btn" onclick="resetFilters()">重置</button>
+                    <button class="confirm-btn" onclick="applyFilters()">确定</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 信息卡片弹窗 -->
+        <div class="info-modal" id="infoModal">
+            <div class="info-card">
+                <button class="close-modal" onclick="closeInfoModal()">×</button>
+                <img id="modalImage" src="" alt="单品详情">
+                <h3 id="modalTitle"></h3>
+                <p id="modalDesc"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 衣橱管理原型 -->
+    <div class="iphone-container">
+        <div class="iphone-notch"></div>
+        <div class="container" id="wardrobe-screen">
+            <header class="header">
+                <h1>我的衣橱</h1>
+                <div class="wardrobe-stats">
+                    <div class="stat-item">
+                        <span class="stat-number">128</span>
+                        <span class="stat-label">总件数</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">12</span>
+                        <span class="stat-label">本周穿着</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">45</span>
+                        <span class="stat-label">收藏搭配</span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="wardrobe-content">
+                <div class="category-grid">
+                    <div class="category-card">
+                        <div class="category-icon">👕</div>
+                        <div class="category-info">
+                            <h3>上装</h3>
+                            <span>42件</span>
+                        </div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-icon">👖</div>
+                        <div class="category-info">
+                            <h3>下装</h3>
+                            <span>38件</span>
+                        </div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-icon">👞</div>
+                        <div class="category-info">
+                            <h3>鞋履</h3>
+                            <span>24件</span>
+                        </div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-icon">👜</div>
+                        <div class="category-info">
+                            <h3>包袋</h3>
+                            <span>16件</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn">
+                    <i class="sf-symbol">camera</i>
+                    <span>上传</span>
+                </button>
+                <button class="nav-btn active">
+                    <i class="sf-symbol">wardrobe</i>
+                    <span>衣橱</span>
+                </button>
+                <button class="nav-btn">
+                    <i class="sf-symbol">person</i>
+                    <span>我的</span>
+                </button>
+            </nav>
+        </div>
+        <div class="iphone-home-indicator"></div>
+    </div>
+
+    <!-- 单品详情弹窗 -->
+    <div class="item-detail-modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-btn">×</button>
+            <img src="" alt="单品大图" class="item-large-image">
+            <div class="item-info">
+                <p class="item-category">品类：<span></span></p>
+                <p class="item-color">颜色：<span></span></p>
+                <p class="item-scene">场景：<span></span></p>
+                <p class="item-last-worn">最近穿着：<span></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/main.js"></script>
+</body>
+</html> 

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LV包详情页</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .phone-frame {
+            max-width: 375px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: 100vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .notch {
+            height: 25px;
+            background: #000;
+            width: 50%;
+            margin: 0 auto;
+            border-radius: 0 0 15px 15px;
+        }
+        
+        .content {
+            padding: 10px;
+        }
+        
+        .product-image-container {
+            width: 100%;
+            position: relative;
+            background: #f7f7f7;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .svg-container {
+            padding: 20px;
+        }
+        
+        .price-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .price-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .main-price {
+            display: flex;
+            align-items: baseline;
+        }
+        
+        .price-symbol {
+            color: #ff4d4f;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .price-amount {
+            color: #ff4d4f;
+            font-size: 24px;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .price-condition {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .free-price-tag {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+            border: 1px solid #a5d6a7;
+            white-space: nowrap;
+        }
+        
+        .product-title-section {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .title-row {
+            margin-bottom: 10px;
+        }
+        
+        .store-badge {
+            display: inline-block;
+            background: #fff1f0;
+            color: #ff4d4f;
+            padding: 2px 8px;
+            border-radius: 2px;
+            font-size: 12px;
+            margin-bottom: 5px;
+            border: 1px solid #ffccc7;
+        }
+        
+        .product-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .store-row {
+            display: flex;
+            align-items: center;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .store-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .store-name {
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        
+        .store-status {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        .guarantee-section {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .guarantee-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .guarantee-icon {
+            color: #52c41a;
+            margin-right: 8px;
+        }
+        
+        .guarantee-text {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .description-section {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 70px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .section-header {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .description-content {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .spec-item {
+            margin-top: 10px;
+            display: flex;
+        }
+        
+        .spec-label {
+            color: #999;
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+        
+        .spec-value {
+            color: #333;
+            flex: 1;
+        }
+        
+        .purchase-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            max-width: 375px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        
+        .action-buttons {
+            display: flex;
+        }
+        
+        .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 15px;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .icon {
+            font-size: 18px;
+            margin-bottom: 3px;
+        }
+        
+        .purchase-buttons {
+            display: flex;
+        }
+        
+        .contact-btn {
+            background: #fff1f0;
+            color: #ff4d4f;
+            border: 1px solid #ff4d4f;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        
+        .buy-btn {
+            background: #ff4d4f;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .home-indicator {
+            height: 5px;
+            width: 40%;
+            background: #000;
+            border-radius: 3px;
+            margin: 5px auto;
+            opacity: 0.2;
+        }
+    </style>
+</head>
+<body>
+    <div class="phone-frame">
+        <div class="notch"></div>
+        <div class="content">
+            <!-- 商品图片 -->
+            <div class="product-image-container">
+                <div class="svg-container">
+                    <svg width="100%" height="250" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <pattern id="lvPattern" patternUnits="userSpaceOnUse" width="80" height="80">
+                                <rect width="80" height="80" fill="#e8d9b7"/>
+                                <!-- LV花纹 -->
+                                <circle cx="40" cy="40" r="15" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M10,10 L30,10 L30,30 L10,30 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M50,10 L70,10 L70,30 L50,30 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M10,50 L30,50 L30,70 L10,70 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M50,50 L70,50 L70,70 L50,70 Z" fill="none" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M15,15 L25,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M25,15 L15,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M55,15 L65,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M65,15 L55,25" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M15,55 L25,65" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M25,55 L15,65" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M55,55 L65,65" stroke="#b48c64" stroke-width="2"/>
+                                <path d="M65,55 L55,65" stroke="#b48c64" stroke-width="2"/>
+                            </pattern>
+
+                            <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#e8d9b7;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#d5c395;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+
+                        <!-- 背景 -->
+                        <rect width="100%" height="100%" fill="#f5f5f5"/>
+                        
+                        <!-- 包的外形 -->
+                        <rect x="40" y="70" width="220" height="160" rx="20" ry="20" fill="url(#bagGradient)"/>
+                        <rect x="40" y="70" width="220" height="160" rx="20" ry="20" fill="url(#lvPattern)" fill-opacity="1"/>
+                        
+                        <!-- 包的结构线 -->
+                        <rect x="40" y="70" width="220" height="160" rx="20" ry="20" fill="none" stroke="#b48c64" stroke-width="2"/>
+                        <line x1="40" y1="100" x2="260" y2="100" stroke="#b48c64" stroke-width="1"/>
+                        <line x1="40" y1="200" x2="260" y2="200" stroke="#b48c64" stroke-width="1"/>
+                        
+                        <!-- 包的手柄 -->
+                        <path d="M90,70 Q90,40 150,40 Q210,40 210,70" fill="none" stroke="#b48c64" stroke-width="5"/>
+                        
+                        <!-- LV标志 -->
+                        <text x="150" y="150" font-family="serif" font-size="24" text-anchor="middle" fill="#8a6e50" font-weight="bold">
+                            LV
+                        </text>
+
+                        <!-- 包的边缘高光 -->
+                        <rect x="42" y="72" width="216" height="156" rx="18" ry="18" fill="none" stroke="white" stroke-width="0.5" opacity="0.6"/>
+
+                        <!-- 包的阴影 -->
+                        <rect x="50" y="232" width="200" height="10" rx="5" ry="5" fill="#00000022"/>
+                    </svg>
+                </div>
+                <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px;">1/7</div>
+            </div>
+
+            <!-- 商品价格信息卡片 -->
+            <div class="price-card">
+                <div class="price-section">
+                    <div class="main-price">
+                        <span class="price-symbol">¥</span>
+                        <span class="price-amount">16099</span>
+                        <span class="price-condition">9.9新</span>
+                    </div>
+                    <div class="free-price-tag">
+                        <span class="free-package-text">无忧包价：0元</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 商品标题和店铺信息 -->
+            <div class="product-title-section">
+                <div class="title-row">
+                    <div class="store-badge">在售商品</div>
+                    <div class="product-title">Louis Vuitton LV路易威登 NIH老花邮差包</div>
+                </div>
+                <div class="store-row">
+                    <img class="store-avatar" src="images/women_42.jpg" alt="店铺头像">
+                    <span class="store-name">奢光中·奢侈品回收</span>
+                    <span class="store-status">营业中 · 24h发货</span>
+                </div>
+            </div>
+
+            <!-- 商品保障信息 -->
+            <div class="guarantee-section">
+                <div class="guarantee-item">
+                    <span class="guarantee-icon">✓</span>
+                    <span class="guarantee-text">100%正品 验货满意再确认</span>
+                </div>
+                <div class="guarantee-item">
+                    <span class="guarantee-icon">✓</span>
+                    <span class="guarantee-text">优品保障 该店铺已缴纳保证金</span>
+                </div>
+            </div>
+
+            <!-- 商品描述 -->
+            <div class="description-section">
+                <div class="section-header">
+                    <span class="section-title">商品描述</span>
+                </div>
+                <div class="description-content">
+                    <p>2025年2月全新Louis Vuitton/路易威登NIH老花 手柄 斜挎包</p>
+                    <div class="spec-item">
+                        <span class="spec-label">尺寸：</span>
+                        <span class="spec-value">约23*17</span>
+                    </div>
+                    <div class="spec-item">
+                        <span class="spec-label">配件：</span>
+                        <span class="spec-value">手提袋 盒子 防尘袋 小票</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部购买栏 -->
+        <div class="purchase-bar">
+            <div class="action-buttons">
+                <div class="action-btn">
+                    <span class="icon">🏠</span>
+                    <span class="label">首页</span>
+                </div>
+                <div class="action-btn">
+                    <span class="icon">❤️</span>
+                    <span class="label">收藏</span>
+                </div>
+                <div class="action-btn">
+                    <span class="icon">💬</span>
+                    <span class="label">客服</span>
+                </div>
+            </div>
+            <div class="purchase-buttons">
+                <button class="contact-btn">立即购买</button>
+                <button class="buy-btn">无忧包下单</button>
+            </div>
+        </div>
+        <div class="home-indicator"></div>
+    </div>
+
+    <script>
+        // 简单的交互效果
+        document.querySelectorAll('.action-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                alert('功能按钮: ' + this.querySelector('.label').textContent);
+            });
+        });
+        
+        document.querySelector('.contact-btn').addEventListener('click', function() {
+            alert('点击了立即购买');
+        });
+        
+        document.querySelector('.buy-btn').addEventListener('click', function() {
+            alert('点击了无忧包下单');
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片加载测试</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: #f5f5f5;
+        }
+        
+        .image-container {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            width: 300px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        img {
+            max-width: 100%;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 5px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        
+        .loading {
+            background-color: #FFF9C4;
+            color: #F57F17;
+        }
+        
+        .success {
+            background-color: #E8F5E9;
+            color: #2E7D32;
+        }
+        
+        .error {
+            background-color: #FFEBEE;
+            color: #C62828;
+        }
+    </style>
+</head>
+<body>
+    <h1>图片加载测试</h1>
+    
+    <!-- 测试1：相对路径 -->
+    <div class="image-container">
+        <h2>测试1：相对路径 (同目录)</h2>
+        <img src="images/lv_bag.jpg" alt="LV包1" 
+             onload="this.parentNode.querySelector('.status').className='status success'; this.parentNode.querySelector('.status').textContent='✓ 加载成功'"
+             onerror="this.parentNode.querySelector('.status').className='status error'; this.parentNode.querySelector('.status').textContent='✗ 加载失败'">
+        <div class="status loading">加载中...</div>
+    </div>
+    
+    <!-- 测试2：带./的相对路径 -->
+    <div class="image-container">
+        <h2>测试2：相对路径 (带./)</h2>
+        <img src="./images/lv_bag.jpg" alt="LV包2" 
+             onload="this.parentNode.querySelector('.status').className='status success'; this.parentNode.querySelector('.status').textContent='✓ 加载成功'"
+             onerror="this.parentNode.querySelector('.status').className='status error'; this.parentNode.querySelector('.status').textContent='✗ 加载失败'">
+        <div class="status loading">加载中...</div>
+    </div>
+    
+    <!-- 测试3：images目录 -->
+    <div class="image-container">
+        <h2>测试3：images目录路径</h2>
+        <img src="images/lv_bag2.jpg" alt="LV包3" 
+             onload="this.parentNode.querySelector('.status').className='status success'; this.parentNode.querySelector('.status').textContent='✓ 加载成功'"
+             onerror="this.parentNode.querySelector('.status').className='status error'; this.parentNode.querySelector('.status').textContent='✗ 加载失败'">
+        <div class="status loading">加载中...</div>
+    </div>
+    
+    <!-- 测试4：绝对路径 -->
+    <div class="image-container">
+        <h2>测试4：绝对路径</h2>
+        <img src="images/lv_bag2.jpg" alt="LV包4" 
+             onload="this.parentNode.querySelector('.status').className='status success'; this.parentNode.querySelector('.status').textContent='✓ 加载成功'"
+             onerror="this.parentNode.querySelector('.status').className='status error'; this.parentNode.querySelector('.status').textContent='✗ 加载失败'">
+        <div class="status loading">加载中...</div>
+    </div>
+    
+    <!-- 测试5：Base64内嵌图片 -->
+    <div class="image-container">
+        <h2>测试5：Base64内嵌图片</h2>
+        <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAQCAwMDAgQDAwMEBAQEBQkGBQUFBQsICAYJDQsNDQ0LDAwOEBQRDg8TDwwMEhgSExUWFxcXDhEZGxkWGhQWFxb/2wBDAQQEBAUFBQoGBgoWDwwPFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhb/wAARCAAyADIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooor/VE+qCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z" alt="LV包5" 
+             onload="this.parentNode.querySelector('.status').className='status success'; this.parentNode.querySelector('.status').textContent='✓ 加载成功'"
+             onerror="this.parentNode.querySelector('.status').className='status error'; this.parentNode.querySelector('.status').textContent='✗ 加载失败'">
+        <div class="status loading">加载中...</div>
+    </div>
+    
+    <script>
+        // 页面加载完成后检查图片状态
+        window.addEventListener('load', function() {
+            console.log('当前页面URL:', window.location.href);
+            var allImages = document.querySelectorAll('img');
+            allImages.forEach(function(img, index) {
+                console.log('图片' + (index + 1) + '相对路径:', img.src);
+                console.log('图片' + (index + 1) + '完整路径:', new URL(img.src, window.location.href).href);
+            });
+        });
+    </script>
+</body>
+</html> 

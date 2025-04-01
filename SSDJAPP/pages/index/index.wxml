@@ -1,0 +1,151 @@
+<!--index.wxml-->
+<scroll-view class="scrollarea" scroll-y type="list">
+  <!-- 手机外框 -->
+  <view class="phone-frame">
+    <!-- 顶部状态栏 -->
+    <view class="status-bar">
+      <text class="time">{{currentTime}}</text>
+      <view class="signal-icons">
+        <text class="signal-icon">📶</text>
+        <text class="wifi-icon">📡</text>
+        <text class="battery-icon">🔋</text>
+      </view>
+    </view>
+
+    <!-- 首页内容区 -->
+    <view class="container" wx:if="{{!isDetailShow}}">
+      <view class="header">
+        <view class="user-info">
+          <image class="avatar" src="{{userInfo.avatarUrl || '/assets/default-avatar.png'}}"></image>
+          <text class="username">今日推荐</text>
+          <text class="location">北京 {{weatherTemp}}</text>
+        </view>
+        <view class="tabs">
+          <text class="tab active">本人</text>
+          <text class="tab">家庭</text>
+          <text class="tab">单品</text>
+        </view>
+      </view>
+
+      <view class="category-selector">
+        <view class="category-item active">适勤</view>
+        <view class="category-item">商务</view>
+        <view class="category-item">休闲</view>
+        <view class="category-item">聚会</view>
+      </view>
+
+      <!-- 二奢包推荐 -->
+      <view class="luxury-item-card" bindtap="showDetail">
+        <image class="item-img" src="https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&h=800&fit=crop" mode="aspectFill"></image>
+        <view class="item-info">
+          <view class="item-title">LV无忧二奢包</view>
+          <view class="item-row">
+            <text class="item-label">价格:</text>
+            <text class="item-value">¥0</text>
+          </view>
+          <view class="item-row">
+            <text class="item-label">品牌:</text>
+            <text class="item-value">Louis Vuitton</text>
+          </view>
+          <view class="view-details-btn" catchtap="showDetail" data-type="detail" data-from="button">查看详情</view>
+          <text class="item-description">二手奢侈品LV包，零元免费领取，品质保证无忧使用，限时推广活动</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 详情页内容区 -->
+    <view class="detail-container" wx:if="{{isDetailShow}}">
+      <!-- 商品详情页头部 -->
+      <view class="detail-header">
+        <view class="back-btn" bindtap="hideDetail">
+          <text>←</text>
+        </view>
+        <view class="header-tabs">
+          <view class="tab {{activeTab === 'product' ? 'active' : ''}}" bindtap="switchTab" data-tab="product">商品</view>
+          <view class="tab {{activeTab === 'detail' ? 'active' : ''}}" bindtap="switchTab" data-tab="detail">详情</view>
+          <view class="tab {{activeTab === 'recommend' ? 'active' : ''}}" bindtap="switchTab" data-tab="recommend">推荐</view>
+          <view class="tab-placeholder"></view>
+        </view>
+      </view>
+
+      <!-- 商品主体内容 -->
+      <scroll-view scroll-y="true" class="product-scroll">
+        <!-- 商品图片 -->
+        <view class="product-image-container">
+          <image class="product-image" src="{{productData.imageUrl}}" mode="aspectFill"></image>
+          <view class="product-condition">{{productData.condition}}</view>
+        </view>
+
+        <!-- 商品基本信息 -->
+        <view class="product-info-detail">
+          <view class="product-price">
+            <text class="price">¥{{productData.price}}</text>
+            <text class="discount">{{productData.discount}}</text>
+          </view>
+          <view class="payment-info">
+            <text>分期购 每月低至{{productData.monthlyPayment}}元 ></text>
+          </view>
+          <view class="product-title-detail">
+            <text class="brand-detail">{{productData.brand}}</text>
+            <text class="name-detail">{{productData.name}}</text>
+          </view>
+        </view>
+
+        <!-- 商品服务信息 -->
+        <view class="service-info">
+          <view class="service-item">
+            <icon class="icon" type="success" size="14" color="#6c3cff"></icon>
+            <text>{{productData.service}}</text>
+          </view>
+          <view class="service-item">
+            <icon class="icon" type="success" size="14" color="#6c3cff"></icon>
+            <text>{{productData.guarantee}}</text>
+          </view>
+        </view>
+
+        <!-- 商品详细描述 -->
+        <view class="product-description-detail">
+          <view class="section-title">商品描述</view>
+          <view class="description-content">
+            <text>{{productData.description}}</text>
+          </view>
+          <view class="specifications">
+            <view class="spec-item">
+              <text class="spec-label">尺寸：</text>
+              <text class="spec-value">{{productData.size}}</text>
+            </view>
+            <view class="spec-item">
+              <text class="spec-label">配件：</text>
+              <text class="spec-value">{{productData.accessories}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <!-- 底部购买栏 -->
+      <view class="purchase-bar">
+        <view class="action-buttons">
+          <view class="action-btn">
+            <text class="icon">🏠</text>
+            <text class="label">首页</text>
+          </view>
+          <view class="action-btn">
+            <text class="icon">❤️</text>
+            <text class="label">收藏</text>
+          </view>
+          <view class="action-btn">
+            <text class="icon">💬</text>
+            <text class="label">客服</text>
+          </view>
+        </view>
+        <view class="purchase-buttons">
+          <button class="free-btn" bindtap="getFreeBag">免费无忧包</button>
+          <button class="buy-btn" bindtap="buyNow">立即购买</button>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 底部导航栏指示器 -->
+    <view class="iphone-home-indicator"></view>
+  </view>
+</scroll-view>
