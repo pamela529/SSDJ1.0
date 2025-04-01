@@ -1,21 +1,21 @@
-name: Unzip and Deploy
-on: [push]  # 每次推送代码时触发
-
+name: Auto Unzip and Deploy
+on:
+  push:
+    paths:  # 仅在推送 ZIP 文件时触发
+      - "SSDJAPP.zip"
 jobs:
   unzip:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Unzip SSDJAPP.zip
-        run: |
-          unzip SSDJAPP.zip -d docs/  # 解压到 docs 目录
-
+        run: | 
+          unzip SSDJAPP.zip -d docs/  # 确保解压到 docs 目录
       - name: Commit changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "Auto-unzip files"
+          git commit -m "自动解压文件"
           git push
