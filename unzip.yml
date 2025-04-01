@@ -1,0 +1,20 @@
+name: Unzip and Deploy
+on: [push]
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Unzip SSDJAPP.zip
+        run: |
+          unzip SSDJ1.0/SSDJAPP.zip -d SSDJ1.0/docs/
+
+      - name: Commit changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Auto-unzip files"
+          git push
