@@ -9,7 +9,7 @@ jobs:
 
       - name: Unzip SSDJAPP.zip
         run: |
-          unzip SSDJ1.0/SSDJAPP.zip -d SSDJ1.0/docs/
+          unzip SSDJ1.0/SSDJAPP.zip -d docs/
 
       - name: Commit changes
         run: |
